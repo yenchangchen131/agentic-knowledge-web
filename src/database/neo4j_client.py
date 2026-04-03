@@ -55,7 +55,7 @@ class Neo4jClient:
         with self.driver.session() as session:
             # 使用 f-string 動態插入標籤，並用反引號包覆處理中文或空格
             # 格式例如: MERGE (n:Entity:`概念` {name: $name})
-            query = f"MERGE (n:Entity:`{clean_type}` {{name: $name}}) SET n += $props"
+            query = f"MERGE (n:Entity {{name: $name}}) SET n:`{clean_type}`, n += $props"
             session.run(query, name=name, props=properties)
 
         logger.info("實體%s成功: %s (%s)", action, name, entity_type)
