@@ -22,9 +22,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 llm = ChatOllama(
-    model="gemma4:e4b",
-    base_url="http://localhost:11434",
-    temperature=0
+    model="gemma4:31b-cloud",
+    base_url="https://ollama.com",
+    temperature=0,
+    client_kwargs={
+        "headers": {
+            "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
+        }
+    }
 )
 
 EXTRACT_PROMPT = """你是一個知識圖譜抽取專家。
@@ -107,7 +112,7 @@ def ingest_directory(dir_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="Markdown 檔案或資料夾路徑")
+    parser.add_argument("--input", default="./data", help="Markdown 檔案或資料夾路徑(預設: %(default)s)")
     args = parser.parse_args()
 
     neo4j = Neo4jClient()
