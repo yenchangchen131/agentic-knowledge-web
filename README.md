@@ -1,10 +1,6 @@
 # Agentic Knowledge Web
-> 從碎片到知識網：基於 GraphRAG 與 Multi-agent 的智能筆記系統
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue)
-![LangGraph](https://img.shields.io/badge/LangGraph-0.1+-green)
-![Neo4j](https://img.shields.io/badge/Neo4j-5.x-orange)
-![Status](https://img.shields.io/badge/Status-PoC-yellow)
+> 從碎片到知識網：基於 GraphRAG 與 Multi-agent 的智能筆記系統
 
 ## Overview
 
@@ -17,42 +13,26 @@
 
 ## System Architecture
 
-```
-Input (Markdown / Code)
-        │
-        ▼
-  Supervisor Agent        ← LangGraph 狀態機，判斷使用者意圖
-        │
-   ┌────┴────┐
-   ▼         ▼
-知識萃取    查詢檢索
- Agent      Agent
-   │         │
-   ▼         ▼
-Neo4j     Chroma
-(Graph DB) (Vector DB)
-        │
-        ▼
-   LLM 生成答案
-        │
-        ▼
-      Output
+```mermaid
+graph TD
+    A[User Question] --> B[Supervisor - LangGraph StateGraph]
+    B --> C[retrieve_node]
+    C --> D[Chroma - vector search]
+    C --> E[LLM - entity extraction]
+    E --> F[Neo4j - graph traversal]
+    D --> G[Merged Context]
+    F --> G
+    G --> H[generate_node]
+    H --> I[LLM - answer generation]
+    I --> J[Answer]
 ```
 
 **技術棧：**
-- **大腦層**：LangGraph + Multi-agent（Supervisor + Worker Agents）
-- **記憶層**：Neo4j（知識圖譜）+ Chroma（向量資料庫）
-- **檢索**：GraphRAG（Local Search + Global Search）
-- **LLM**：OpenAI GPT-4o
 
-## Core Features（PoC 範圍）
-
-- [x] Markdown 筆記解析與 Chunking
-- [ ] LLM 自動抽取實體與關係，寫入 Neo4j
-- [ ] Embedding 寫入 Chroma
-- [ ] LangGraph Supervisor + 查詢 Agent
-- [ ] 雙引擎檢索（Vector + Graph）並合併 Context
-- [ ] 端對端 Q&A Demo
+- **大腦層**：LangGraph + Multi-agent
+- **記憶層**：Neo4j（知識圖譜，本地運行）+ Chroma（向量資料庫）
+- **檢索**：GraphRAG 概念（Vector + Graph 雙引擎）
+- **LLM**：Ollama (gemma4:31b-cloud 等模型)，Embedding 使用本地 Ollama 模型
 
 ## Quick Start
 
@@ -68,20 +48,21 @@ pip install -r requirements.txt
 
 # 3. 設定環境變數
 cp .env.example .env
-# 填入 OPENAI_API_KEY
+# 填入 OLLAMA_API_KEY 以及本地 Neo4j 的帳號密碼（預設 neo4j/password）
 
-# 4. 啟動 Neo4j（Docker）
-docker run -d \
-  --name neo4j-poc \
-  -p 7474:7474 -p 7687:7687 \
-  -e NEO4J_AUTH=neo4j/password \
-  neo4j:latest
+# 4. 啟動依賴服務
+# 請確保你的電腦已啟動：
+# - 本地 Neo4j 服務 (例如 Neo4j Desktop)
+# - 本地 Ollama 服務 (供 Embedding 使用)
 
 # 5. 執行寫入流程
-python src/scripts/ingest.py --input data/sample_notes/
+uv run src/scripts/ingest.py --input data/test_note.md
 
 # 6. 執行查詢
-python src/scripts/query.py --question "GraphRAG 和傳統 RAG 的差異是什麼？"
+uv run src/scripts/query.py --question "GraphRAG 和傳統 RAG 的差異是什麼？"
+
+# 7. 執行查詢（Debug 模式，輸出中間結果）
+uv run src/scripts/query.py --question "GraphRAG 是什麼？" --debug
 ```
 
 ## Project Structure
@@ -99,25 +80,11 @@ agentic-knowledge-web/
 │   │   └── chroma_client.py     # Chroma 向量資料庫操作
 │   └── scripts/
 │       ├── ingest.py            # 寫入流程（Chunking → Extraction → Loading）
-│       └── query.py             # 查詢入口
+│       ├── query.py             # 查詢入口
+│       └── reset.py             # 重置資料庫工具
 ├── main.py                      # 主程式入口
 ├── .env.example
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
 ```
-
-## Development Roadmap
-
-| 階段 | 內容 | 預計完成 |
-|------|------|----------|
-| PoC | 寫入流程 + 基本 Q&A | 4/20 |
-| v0.2 | Self-Correction Loop | 4/27 |
-| v0.3 | Human-in-the-loop | 5/4 |
-| Final | 路徑規劃 Agent + 完整評估 | 5/11 |
-
-## References
-
-- [GraphRAG (Microsoft)](https://github.com/microsoft/graphrag)
-- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
-- [Neo4j Python Driver](https://neo4j.com/docs/python-manual/current/)
