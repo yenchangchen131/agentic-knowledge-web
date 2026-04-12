@@ -15,7 +15,7 @@ class ChromaClient:
             path=os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
         )
         self.embeddings = OllamaEmbeddings(
-            model="bge-m3",
+            model="nomic-embed-text",
             base_url="http://localhost:11434"
         )
         self.collection = self.client.get_or_create_collection(
