@@ -74,7 +74,7 @@ def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
     for i, chunk in enumerate(chunks):
         text = chunk.page_content
         metadata = {**chunk.metadata, "source": file_path, "chunk_index": i}
-        chunk_id = hashlib.md5(f"{file_path}_{i}".encode()).hexdigest()
+        chunk_id = hashlib.md5(f"{file_path}_{i}_{text}".encode()).hexdigest()
 
         chroma.add_chunk(chunk_id, text, metadata)
 
