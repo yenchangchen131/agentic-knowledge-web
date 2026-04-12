@@ -11,3 +11,10 @@ wheels/
 
 .env
 chroma_db/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Uploads
+data/uploads/
