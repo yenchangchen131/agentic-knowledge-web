@@ -51,8 +51,12 @@ def retrieve(question: str, chroma: ChromaClient, neo4j: Neo4jClient, llm) -> di
 
     # 1. Vector search
     logger.info("開始向量檢索...")
-    vector_results = chroma.query(question, n_results=3)
-    logger.info("向量檢索完成，取得 %d 筆結果", len(vector_results))
+    try:
+        vector_results = chroma.query(question, n_results=3)
+        logger.info("向量檢索完成，取得 %d 筆結果", len(vector_results))
+    except Exception as e:
+        logger.error("向量檢索失敗 (可能是 Ollama Embedding 模型異常): %s", e)
+        vector_results = []
     debug["vector_results"] = vector_results
 
     # 2. Extract entities from question
