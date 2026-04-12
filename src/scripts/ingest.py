@@ -7,10 +7,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-import sys
-import os
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 

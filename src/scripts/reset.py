@@ -1,10 +1,5 @@
 # src/scripts/reset_db.py
 import logging
-import sys
-import os
-
-# 確保能讀取到 src 模組
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 

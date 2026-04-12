@@ -6,10 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
-import sys
-import os
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.agents.supervisor import create_graph
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
