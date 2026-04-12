@@ -18,7 +18,7 @@ graph TD
     A[使用者介面 React + Vite] -->|上傳筆記 / api/ingest| B(FastAPI 後端)
     A -->|圖譜操作 / api/graph| B
     A -->|詢問 AI / api/chat| B
-    
+  
     B -.->|處理邏輯| C[Supervisor - LangGraph]
     C --> D[retrieve_node]
     D --> E[Chroma - 向量檢索]
@@ -38,7 +38,7 @@ graph TD
 - **大腦層**：LangGraph + Multi-agent
 - **記憶層**：Neo4j（知識圖譜，本地運行）+ Chroma（向量資料庫，本地持久化）
 - **RAG 檢索**：GraphRAG 概念（Vector + Graph 雙引擎）
-- **LLM**：Ollama (gemma4:31b-cloud 等模型)，Embedding 使用本地 Ollama 模型 (`bge-m3`)
+- **LLM**：Ollama (gemma4:31b-cloud 等模型)，Embedding 使用本地 Ollama 模型 (nomic-embed-text)
 
 ## Quick Start
 
@@ -65,8 +65,8 @@ uv run python -m uvicorn main:app --reload
 
 # 6. 啟動前端開發伺服器（請另開一個終端機）
 cd frontend
-npm install
-npm run dev
+cmd /c npm install
+cmd /c npm run dev
 # 前端介面將運行在 http://localhost:5173
 ```
 
