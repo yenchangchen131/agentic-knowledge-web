@@ -5,14 +5,11 @@ import json
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-import sys
-import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
+from src.scripts.llm import create_llm
 
 load_dotenv()
 logging.basicConfig(
@@ -21,16 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-llm = ChatOllama(
-    model="gemma4:31b-cloud",
-    base_url="https://ollama.com",
-    temperature=0,
-    client_kwargs={
-        "headers": {
-            "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
-        }
-    }
-)
+llm = create_llm()
 
 EXTRACT_PROMPT = """你是一個知識圖譜抽取專家。
 請從以下文字中抽取實體與關係，並以 JSON 格式回傳。
@@ -86,7 +74,7 @@ def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
     for i, chunk in enumerate(chunks):
         text = chunk.page_content
         metadata = {**chunk.metadata, "source": file_path, "chunk_index": i}
-        chunk_id = hashlib.md5(f"{file_path}_{i}".encode()).hexdigest()
+        chunk_id = hashlib.md5(f"{file_path}_{i}_{text}".encode()).hexdigest()
 
         chroma.add_chunk(chunk_id, text, metadata)
 

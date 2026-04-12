@@ -1,10 +1,6 @@
 # src/agents/retriever.py
 import logging
 import json
-import sys
-import os
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 

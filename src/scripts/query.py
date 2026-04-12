@@ -5,14 +5,12 @@ import json
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
-import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.agents.supervisor import create_graph
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
+from src.scripts.llm import create_llm
 
 load_dotenv()
 logging.basicConfig(
@@ -131,17 +129,8 @@ def main():
     )
     args = parser.parse_args()
 
-    # 初始化 LLM（與 ingest.py 保持一致）
-    llm = ChatOllama(
-        model="gemma4:31b-cloud",
-        base_url="https://ollama.com",
-        temperature=0,
-        client_kwargs={
-            "headers": {
-                "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
-            }
-        }
-    )
+    # 初始化 LLM（使用共用工廠函式）
+    llm = create_llm()
 
     # 初始化資料庫
     neo4j = Neo4jClient()

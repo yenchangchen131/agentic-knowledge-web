@@ -43,7 +43,7 @@ class Neo4jClient:
             )
             return result.single()["count"] > 0
 
-    def create_entity(self, name: str, entity_type: str, properties: dict = {}):
+    def create_entity(self, name: str, entity_type: str, properties: dict | None = None):
         """寫入一個實體節點，已存在則更新"""
         if properties is None:
             properties = {}

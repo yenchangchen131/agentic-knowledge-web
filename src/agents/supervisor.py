@@ -2,10 +2,6 @@
 import logging
 from typing import TypedDict, Any
 from langgraph.graph import StateGraph, START, END
-import sys
-import os
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from src.agents.retriever import retrieve
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
