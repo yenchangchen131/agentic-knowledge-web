@@ -60,12 +60,16 @@ def extract_graph(text: str, llm) -> dict:
         logger.warning("LLM 回傳格式錯誤，跳過此 chunk:\n%s", content)
         return {"entities": [], "relations": []}
 
-def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
-    """處理單一 Markdown 檔案，寫入向量庫與知識圖譜"""
+def ingest_file_stream(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
+    """處理單一 Markdown 檔案，以串流方式 yield 處理進度"""
     if llm is None:
         llm = create_llm()
     logger.info("開始處理: %s", file_path)
     chunks = chunk_markdown(file_path)
+    total_chunks = len(chunks)
+
+    # 初始進度
+    yield {"status": "processing", "progress": 0, "total": total_chunks, "filename": Path(file_path).name}
 
     for i, chunk in enumerate(chunks):
         text = chunk.page_content
@@ -85,8 +89,17 @@ def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=No
                 relation["target"],
                 relation["type"]
             )
+            
+        yield {"status": "processing", "progress": i + 1, "total": total_chunks, "filename": Path(file_path).name}
 
-    logger.info("完成處理: %s，共 %d chunks", file_path, len(chunks))
+    logger.info("完成處理: %s，共 %d chunks", file_path, total_chunks)
+    yield {"status": "success", "progress": total_chunks, "total": total_chunks, "filename": Path(file_path).name}
+
+
+def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
+    """處理單一 Markdown 檔案，寫入向量庫與知識圖譜 (相容舊有同步呼叫)"""
+    for _ in ingest_file_stream(file_path, neo4j, chroma, llm):
+        pass
 
 def ingest_directory(dir_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
     """處理整個資料夾中的所有 Markdown 檔案"""

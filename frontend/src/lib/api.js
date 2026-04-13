@@ -30,14 +30,55 @@ export async function sendChat(question) {
   return data;
 }
 
-/** 上傳 Markdown 檔案 */
-export async function uploadFile(file) {
+/** 上傳 Markdown 檔案並追蹤進度 */
+export async function uploadFile(file, onProgress) {
   const form = new FormData();
   form.append('file', file);
-  const { data } = await api.post('/api/ingest', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+
+  const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/ingest`, {
+    method: 'POST',
+    body: form,
   });
-  return data;
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Upload failed: ${response.status} ${text}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let result = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    const chunk_str = decoder.decode(value, { stream: true });
+    // 因為可能是多個 JSON 連在一起被讀取 (NDJSON)
+    const lines = chunk_str.split('\n').filter(Boolean);
+    
+    for (const line of lines) {
+      try {
+        const data = JSON.parse(line);
+        if (data.status === 'error') {
+          throw new Error(data.error);
+        }
+        if (onProgress) {
+          onProgress(data);
+        }
+        if (data.status === 'success') {
+          result = data;
+        }
+      } catch (err) {
+        if (err.message !== "Unexpected end of JSON input") {
+           // Skip half-parsed lines or re-throw proper errors
+           if (err.message !== data?.error) console.error("JSON Parse Error:", err, line);
+           else throw err;
+        }
+      }
+    }
+  }
+  return result;
 }
 
 /** 重置資料庫 */
