@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from pydantic import BaseModel
 
 from src.scripts.ingest import ingest_file
-from src.api.deps import get_neo4j, get_chroma
+from src.api.deps import get_neo4j, get_chroma, get_llm
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ingest"])
@@ -24,7 +24,8 @@ class IngestResponse(BaseModel):
 async def ingest(
     file: UploadFile = File(...),
     neo4j=Depends(get_neo4j),
-    chroma=Depends(get_chroma)
+    chroma=Depends(get_chroma),
+    llm=Depends(get_llm)
 ):
     """上傳 Markdown 檔案並寫入知識庫"""
     if not file.filename or not file.filename.endswith(".md"):
@@ -42,7 +43,7 @@ async def ingest(
     # 呼叫現有的 ingest 邏輯
     try:
         chunk_count_before = chroma.count()
-        ingest_file(str(file_path), neo4j, chroma)
+        ingest_file(str(file_path), neo4j, chroma, llm)
         chunk_count_after = chroma.count()
         new_chunks = chunk_count_after - chunk_count_before
 
