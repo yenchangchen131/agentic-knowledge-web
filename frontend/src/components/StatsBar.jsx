@@ -19,7 +19,7 @@ export default function StatsBar() {
         <div key={label} className="stat-card flex items-center gap-2">
           <Icon size={14} className={color} />
           <span className="text-xs text-slate-400">{label}</span>
-          <span className="text-sm font-semibold text-white">{value.toLocaleString()}</span>
+          <span className="text-sm font-semibold text-white">{(value ?? 0).toLocaleString()}</span>
         </div>
       ))}
     </div>

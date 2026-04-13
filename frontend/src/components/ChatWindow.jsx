@@ -36,15 +36,16 @@ export default function ChatWindow() {
     if (!question || isChatLoading) return;
 
     // 加入使用者訊息
-    addMessage({ role: 'user', content: question });
+    addMessage({ id: Date.now() + '-user', role: 'user', content: question });
     setLocalInput('');
     setIsChatLoading(true);
 
     try {
       const result = await sendChat(question);
-      addMessage({ role: 'ai', content: result.answer });
+      addMessage({ id: Date.now() + '-ai', role: 'ai', content: result.answer });
     } catch (err) {
       addMessage({
+        id: Date.now() + '-err',
         role: 'ai',
         content: `❌ 發生錯誤：${err.response?.data?.detail || err.message}`,
       });
@@ -81,7 +82,7 @@ export default function ChatWindow() {
 
         {messages.map((msg, i) => (
           <div
-            key={i}
+            key={msg.id}
             className={`fade-in ${msg.role === 'user' ? 'msg-user' : 'msg-ai'}`}
           >
             {msg.role === 'ai' ? (
