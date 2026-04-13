@@ -1,10 +1,7 @@
 # src/database/neo4j_client.py
 import logging
-from neo4j import GraphDatabase
-from dotenv import load_dotenv
 import os
-
-load_dotenv()
+from neo4j import GraphDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +25,14 @@ class Neo4jClient:
             return ok
     
     def _sanitize(self, text: str) -> str:
-        """過濾字串中的反引號，避免 Cypher 語法錯誤或注入風險"""
+        """過濾字串，只保留安全字元（字母、數字、中文、底線、連字號、空格），
+        避免 Cypher 語法錯誤或注入風險"""
+        import re
         if not text:
             return "Unknown"
-        return str(text).replace("`", "").strip()
+        # 只保留字母、數字、中文字元、底線、連字號和空格
+        cleaned = re.sub(r'[^\w\s\u4e00-\u9fff\u3400-\u4dbf-]', '', str(text)).strip()
+        return cleaned if cleaned else "Unknown"
 
     def entity_exists(self, name: str) -> bool:
         """檢查實體是否已存在"""
