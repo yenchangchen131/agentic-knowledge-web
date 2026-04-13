@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.api import chat, ingest, reset, graph
+from src.api import chat, ingest, reset, graph, documents
 from src.api.deps import get_neo4j
 
 logging.basicConfig(
@@ -60,6 +60,7 @@ app.include_router(chat.router)
 app.include_router(ingest.router)
 app.include_router(reset.router)
 app.include_router(graph.router)
+app.include_router(documents.router)
 
 # 生產環境：serve 前端 build 產物
 frontend_dist = Path("frontend/dist")

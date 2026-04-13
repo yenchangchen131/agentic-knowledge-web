@@ -33,8 +33,8 @@ export default function GraphView() {
     const handleResize = () => {
       if (fgRef.current && containerRef.current) {
         const { width, height } = containerRef.current.getBoundingClientRect();
-        fgRef.current.width(width);
-        fgRef.current.height(height);
+        if (typeof fgRef.current.width === 'function') fgRef.current.width(width);
+        if (typeof fgRef.current.height === 'function') fgRef.current.height(height);
       }
     };
 

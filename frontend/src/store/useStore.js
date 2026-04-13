@@ -8,6 +8,9 @@ const useStore = create((set, get) => ({
   selectedNode: null,
   expandedNodes: new Set(), // 已展開的節點
 
+  // ─── 視圖狀態 ───
+  viewMode: 'graph', // 'graph' | 'document'
+
   // ─── 聊天狀態 ───
   messages: [],
   chatInput: '',
@@ -55,6 +58,9 @@ const useStore = create((set, get) => ({
   },
 
   setSelectedNode: (node) => set({ selectedNode: node }),
+
+  // ─── UI Actions ───
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   // ─── 聊天 Actions ───
   setChatInput: (text) => set({ chatInput: text }),

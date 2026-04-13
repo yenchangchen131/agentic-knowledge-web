@@ -56,7 +56,7 @@ export async function uploadFile(file, onProgress) {
     const chunk_str = decoder.decode(value, { stream: true });
     // 因為可能是多個 JSON 連在一起被讀取 (NDJSON)
     const lines = chunk_str.split('\n').filter(Boolean);
-    
+
     for (const line of lines) {
       try {
         const data = JSON.parse(line);
@@ -71,9 +71,9 @@ export async function uploadFile(file, onProgress) {
         }
       } catch (err) {
         if (err.message !== "Unexpected end of JSON input") {
-           // Skip half-parsed lines or re-throw proper errors
-           if (err.message !== data?.error) console.error("JSON Parse Error:", err, line);
-           else throw err;
+          // Skip half-parsed lines or re-throw proper errors
+          if (err.message !== data?.error) console.error("JSON Parse Error:", err, line);
+          else throw err;
         }
       }
     }
@@ -84,6 +84,21 @@ export async function uploadFile(file, onProgress) {
 /** 重置資料庫 */
 export async function resetDatabase() {
   const { data } = await api.post('/api/reset');
+  return data;
+}
+
+/** 取得上傳的檔案清單 */
+export async function fetchDocuments() {
+  const { data } = await api.get('/api/documents');
+  return data.documents;
+}
+
+/** 取得特定 Markdown 檔案內容 */
+export async function fetchDocumentContent(filename) {
+  const { data } = await api.get(`/api/documents/${encodeURIComponent(filename)}`, {
+    responseType: 'text',
+    transformResponse: [(data) => data],  // 不要嘗試 JSON parse
+  });
   return data;
 }
 
