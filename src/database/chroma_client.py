@@ -1,11 +1,8 @@
 # src/database/chroma_client.py
 import logging
+import os
 from chromadb import PersistentClient
 from langchain_ollama import OllamaEmbeddings
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +12,22 @@ class ChromaClient:
             path=os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
         )
         self.embeddings = OllamaEmbeddings(
-            model="nomic-embed-text",
-            base_url="http://localhost:11434"
+            model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
+            base_url=os.getenv("EMBEDDING_BASE_URL", "http://localhost:11434")
         )
         self.collection = self.client.get_or_create_collection(
             name="knowledge_web"
         )
         logger.info("ChromaClient 初始化完成，目前 chunk 數量: %d", self.collection.count())
+
+    def reset_collection(self):
+        """刪除並重建 Collection，確保 reference 是最新的"""
+        try:
+            self.client.delete_collection("knowledge_web")
+        except Exception as e:
+            logger.warning("刪除 ChromaDB Collection 時發生狀況: %s", e)
+        self.collection = self.client.get_or_create_collection("knowledge_web")
+        logger.info("ChromaDB Collection 已重置並重建")
 
     def _sanitize_metadata(self, metadata: dict) -> dict:
         """過濾 metadata 中 Chroma 不支援的值（None、nested dict、list）"""

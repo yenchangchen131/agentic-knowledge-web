@@ -1,31 +1,41 @@
-# src/scripts/reset_db.py
+# src/scripts/reset.py
+"""資料庫重置邏輯，可被 API 呼叫或 CLI 直接執行"""
 import logging
 
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def reset_neo4j():
-    client = Neo4jClient()
+
+def reset_neo4j(client: Neo4jClient | None = None):
+    """清空 Neo4j 所有資料。若未提供 client，則自行建立並於完成後關閉。"""
+    own_client = client is None
+    if own_client:
+        client = Neo4jClient()
     logger.info("開始清空 Neo4j...")
     with client.driver.session() as session:
         session.run("MATCH (n) DETACH DELETE n")
     logger.info("Neo4j 已清空！")
-    client.close()
+    if own_client:
+        client.close()
 
-def reset_chroma():
-    client = ChromaClient()
+
+def reset_chroma(client: ChromaClient | None = None):
+    """清空 ChromaDB 的 knowledge_web Collection。若未提供 client，則自行建立。"""
+    own_client = client is None
+    if own_client:
+        client = ChromaClient()
     logger.info("開始清空 ChromaDB...")
     try:
-        # 直接刪除名為 knowledge_web 的 Collection
-        client.client.delete_collection("knowledge_web")
-        logger.info("ChromaDB 的 knowledge_web Collection 已清空並刪除！")
+        client.reset_collection()
+        logger.info("ChromaDB 的 knowledge_web Collection 已清空並重建！")
     except Exception as e:
-        logger.warning("清除 ChromaDB 時發生狀況 (可能原本就是空的): %s", e)
+        logger.error("重置 ChromaDB 失敗: %s", e)
+
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     confirm = input("⚠️ 警告：這將會刪除所有 Neo4j 和 Chroma 的資料！確定要繼續嗎？(y/n): ")
     if confirm.lower() == 'y':
         reset_neo4j()

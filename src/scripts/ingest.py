@@ -4,21 +4,13 @@ import hashlib
 import json
 import argparse
 from pathlib import Path
-from dotenv import load_dotenv
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 from src.scripts.llm import create_llm
 
-load_dotenv()
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
 logger = logging.getLogger(__name__)
-
-llm = create_llm()
 
 EXTRACT_PROMPT = """你是一個知識圖譜抽取專家。
 請從以下文字中抽取實體與關係，並以 JSON 格式回傳。
@@ -52,7 +44,8 @@ def chunk_markdown(file_path: str) -> list:
     logger.info("檔案 %s 切成 %d 個 chunks", file_path, len(chunks))
     return chunks
 
-def extract_graph(text: str) -> dict:
+def extract_graph(text: str, llm) -> dict:
+    """用 LLM 從文字中抽取實體與關係"""
     prompt = EXTRACT_PROMPT.format(text=text)
     response = llm.invoke(prompt)
     # 清理 LLM 可能回傳的 markdown 代碼塊
@@ -67,9 +60,16 @@ def extract_graph(text: str) -> dict:
         logger.warning("LLM 回傳格式錯誤，跳過此 chunk:\n%s", content)
         return {"entities": [], "relations": []}
 
-def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
+def ingest_file_stream(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
+    """處理單一 Markdown 檔案，以串流方式 yield 處理進度"""
+    if llm is None:
+        llm = create_llm()
     logger.info("開始處理: %s", file_path)
     chunks = chunk_markdown(file_path)
+    total_chunks = len(chunks)
+
+    # 初始進度
+    yield {"status": "processing", "progress": 0, "total": total_chunks, "filename": Path(file_path).name}
 
     for i, chunk in enumerate(chunks):
         text = chunk.page_content
@@ -78,7 +78,7 @@ def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
 
         chroma.add_chunk(chunk_id, text, metadata)
 
-        graph_data = extract_graph(text)
+        graph_data = extract_graph(text, llm)
 
         for entity in graph_data.get("entities", []):
             neo4j.create_entity(entity["name"], entity["type"])
@@ -89,28 +89,48 @@ def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
                 relation["target"],
                 relation["type"]
             )
+            
+        yield {"status": "processing", "progress": i + 1, "total": total_chunks, "filename": Path(file_path).name}
 
-    logger.info("完成處理: %s，共 %d chunks", file_path, len(chunks))
+    logger.info("完成處理: %s，共 %d chunks", file_path, total_chunks)
+    yield {"status": "success", "progress": total_chunks, "total": total_chunks, "filename": Path(file_path).name}
 
-def ingest_directory(dir_path: str, neo4j: Neo4jClient, chroma: ChromaClient):
+
+def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
+    """處理單一 Markdown 檔案，寫入向量庫與知識圖譜 (相容舊有同步呼叫)"""
+    for _ in ingest_file_stream(file_path, neo4j, chroma, llm):
+        pass
+
+def ingest_directory(dir_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
+    """處理整個資料夾中的所有 Markdown 檔案"""
+    if llm is None:
+        llm = create_llm()
     md_files = list(Path(dir_path).glob("**/*.md"))
     logger.info("找到 %d 個 Markdown 檔案", len(md_files))
     for file_path in md_files:
-        ingest_file(str(file_path), neo4j, chroma)
+        ingest_file(str(file_path), neo4j, chroma, llm)
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="./data", help="Markdown 檔案或資料夾路徑(預設: %(default)s)")
     args = parser.parse_args()
 
+    llm = create_llm()
     neo4j = Neo4jClient()
     chroma = ChromaClient()
 
     input_path = Path(args.input)
     if input_path.is_file():
-        ingest_file(str(input_path), neo4j, chroma)
+        ingest_file(str(input_path), neo4j, chroma, llm)
     elif input_path.is_dir():
-        ingest_directory(str(input_path), neo4j, chroma)
+        ingest_directory(str(input_path), neo4j, chroma, llm)
     else:
         logger.error("路徑不存在: %s", args.input)
 

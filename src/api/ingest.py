@@ -3,10 +3,12 @@
 import logging
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import json
 
-from src.scripts.ingest import ingest_file
-from src.api.deps import get_neo4j, get_chroma
+from src.scripts.ingest import ingest_file_stream
+from src.api.deps import get_neo4j, get_chroma, get_llm
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ingest"])
@@ -14,19 +16,17 @@ router = APIRouter(prefix="/api", tags=["ingest"])
 UPLOAD_DIR = Path("data/uploads")
 
 
-class IngestResponse(BaseModel):
-    status: str
-    filename: str
-    chunks: int = 0
 
 
-@router.post("/ingest", response_model=IngestResponse)
+
+@router.post("/ingest")
 async def ingest(
     file: UploadFile = File(...),
     neo4j=Depends(get_neo4j),
-    chroma=Depends(get_chroma)
+    chroma=Depends(get_chroma),
+    llm=Depends(get_llm)
 ):
-    """上傳 Markdown 檔案並寫入知識庫"""
+    """上傳 Markdown 檔案並即時透過 NDJSON 串流回傳知識庫匯入進度"""
     if not file.filename or not file.filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="僅接受 .md 格式的檔案")
 
@@ -39,18 +39,15 @@ async def ingest(
     file_path.write_bytes(content)
     logger.info("檔案已儲存: %s", file_path)
 
-    # 呼叫現有的 ingest 邏輯
-    try:
-        chunk_count_before = chroma.count()
-        ingest_file(str(file_path), neo4j, chroma)
-        chunk_count_after = chroma.count()
-        new_chunks = chunk_count_after - chunk_count_before
+    async def stream_generator():
+        try:
+            # 遍歷執行 ingest_file_stream (同步)
+            # 在真實生產環境中，長時間的同步 IO 可能需要放進 run_in_threadpool
+            # 這裡為了展示單純串流進度將直接執行並 yield。
+            for progress_data in ingest_file_stream(str(file_path), neo4j, chroma, llm):
+                yield json.dumps(progress_data) + "\n"
+        except Exception as e:
+            logger.error("Ingest 失敗: %s", e)
+            yield json.dumps({"status": "error", "error": str(e)}) + "\n"
 
-        return IngestResponse(
-            status="success",
-            filename=file.filename,
-            chunks=new_chunks
-        )
-    except Exception as e:
-        logger.error("Ingest 失敗: %s", e)
-        raise HTTPException(status_code=500, detail=f"處理失敗: {e}")
+    return StreamingResponse(stream_generator(), media_type="application/x-ndjson")

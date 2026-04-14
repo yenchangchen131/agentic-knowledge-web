@@ -6,6 +6,7 @@ from functools import lru_cache
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 from src.scripts.llm import create_llm
+from src.agents.supervisor import create_graph
 
 logger = logging.getLogger(__name__)
 
@@ -29,3 +30,8 @@ def get_llm():
     """取得 LLM 單例"""
     logger.info("初始化 LLM 單例")
     return create_llm()
+
+
+def get_compiled_graph():
+    """取得已編譯的 LangGraph 單例"""
+    return create_graph(get_neo4j(), get_chroma(), get_llm())

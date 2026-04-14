@@ -4,19 +4,12 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv
-import os
 
 from src.agents.supervisor import create_graph
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
 from src.scripts.llm import create_llm
 
-load_dotenv()
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
@@ -164,4 +157,10 @@ def main():
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
     main()

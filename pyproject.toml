@@ -1,7 +1,7 @@
 [project]
 name = "agentic-knowledge-web"
 version = "0.1.0"
-description = "Add your description here"
+description = "基於 GraphRAG 與 Multi-agent 的全端智能筆記與互動知識圖譜系統"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
