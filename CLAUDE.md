@@ -102,3 +102,9 @@ User → React (Vite) → FastAPI → LangGraph Supervisor
 
 ### Cypher injection protection
 `Neo4jClient._sanitize()` strips all characters outside `[\w\s一-鿿㐀-䶿-]` before inserting dynamic values into Cypher f-strings. Named parameters (`$name`, `$source`, etc.) are used for all user-supplied data values.
+
+### Key invariants
+
+**`src/api/deps.py`** — every function that returns a singleton **must** have `@lru_cache()`. Missing it causes the object (e.g. compiled LangGraph) to be rebuilt on every request.
+
+**Async/sync bridge pattern** — when a sync generator needs to stream into an async `StreamingResponse`, use `asyncio.to_thread` + `asyncio.Queue` + `loop.call_soon_threadsafe`. See `src/api/ingest.py` `stream_generator()` for the reference implementation.
