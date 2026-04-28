@@ -1,10 +1,10 @@
 # src/api/ingest.py
 """文件上傳與知識寫入 API"""
+import asyncio
 import logging
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 import json
 
 from src.scripts.ingest import ingest_file_stream
@@ -14,9 +14,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ingest"])
 
 UPLOAD_DIR = Path("data/uploads")
-
-
-
 
 
 @router.post("/ingest")
@@ -40,14 +37,30 @@ async def ingest(
     logger.info("檔案已儲存: %s", file_path)
 
     async def stream_generator():
-        try:
-            # 遍歷執行 ingest_file_stream (同步)
-            # 在真實生產環境中，長時間的同步 IO 可能需要放進 run_in_threadpool
-            # 這裡為了展示單純串流進度將直接執行並 yield。
-            for progress_data in ingest_file_stream(str(file_path), neo4j, chroma, llm):
-                yield json.dumps(progress_data) + "\n"
-        except Exception as e:
-            logger.error("Ingest 失敗: %s", e)
-            yield json.dumps({"status": "error", "error": str(e)}) + "\n"
+        _sentinel = object()
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def run_ingest():
+            try:
+                for progress_data in ingest_file_stream(str(file_path), neo4j, chroma, llm):
+                    loop.call_soon_threadsafe(queue.put_nowait, progress_data)
+            except Exception as e:
+                logger.error("Ingest 失敗: %s", e)
+                loop.call_soon_threadsafe(queue.put_nowait, {"status": "error", "error": str(e)})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, _sentinel)
+
+        thread = asyncio.create_task(asyncio.to_thread(run_ingest))
+
+        while True:
+            item = await queue.get()
+            if item is _sentinel:
+                break
+            yield json.dumps(item) + "\n"
+            if isinstance(item, dict) and item.get("status") == "error":
+                break
+
+        await thread
 
     return StreamingResponse(stream_generator(), media_type="application/x-ndjson")

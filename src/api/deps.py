@@ -32,6 +32,7 @@ def get_llm():
     return create_llm()
 
 
+@lru_cache()
 def get_compiled_graph():
     """取得已編譯的 LangGraph 單例"""
     return create_graph(get_neo4j(), get_chroma(), get_llm())
