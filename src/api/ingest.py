@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 import json
 
-from src.scripts.ingest import ingest_file_stream
+from src.scripts.ingest import ingest_file_stream, SUPPORTED_EXTENSIONS
 from src.api.deps import get_neo4j, get_chroma, get_llm
 
 logger = logging.getLogger(__name__)
@@ -23,9 +23,10 @@ async def ingest(
     chroma=Depends(get_chroma),
     llm=Depends(get_llm)
 ):
-    """上傳 Markdown 檔案並即時透過 NDJSON 串流回傳知識庫匯入進度"""
-    if not file.filename or not file.filename.endswith(".md"):
-        raise HTTPException(status_code=400, detail="僅接受 .md 格式的檔案")
+    """上傳檔案並即時透過 NDJSON 串流回傳知識庫匯入進度"""
+    ext = Path(file.filename).suffix.lower() if file.filename else ""
+    if not file.filename or ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"僅接受 {', '.join(sorted(SUPPORTED_EXTENSIONS))} 格式的檔案")
 
     # 確保上傳目錄存在
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,10 +1,9 @@
 // src/components/DocumentView.jsx
 import { useEffect, useState, Component } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FileText, Loader2, Clock, HardDrive } from 'lucide-react';
-import { fetchDocuments, fetchDocumentContent } from '../lib/api';
+import { FileText, Loader2, Clock, HardDrive, FileCode, FileType } from 'lucide-react';
+import { fetchDocuments, fetchDocumentContent, API_BASE } from '../lib/api';
 
-// React Error Boundary 防止 Markdown 渲染崩潰時帶走整個畫面
 class MarkdownErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -16,9 +15,9 @@ class MarkdownErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-4 text-red-400 bg-red-900/20 rounded-lg border border-red-500/30">
+        <div className="p-4 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-500/30">
           <p className="font-bold mb-2">Markdown 渲染錯誤</p>
-          <pre className="text-xs text-red-300 whitespace-pre-wrap">{this.state.error?.message}</pre>
+          <pre className="text-xs text-red-400 dark:text-red-300 whitespace-pre-wrap">{this.state.error?.message}</pre>
         </div>
       );
     }
@@ -26,10 +25,17 @@ class MarkdownErrorBoundary extends Component {
   }
 }
 
+const FILE_ICONS = {
+  md: FileText,
+  txt: FileCode,
+  pdf: FileType,
+  docx: FileText,
+};
+
 export default function DocumentView() {
   const [documents, setDocuments] = useState([]);
   const [selectedDoc, setSelectedDoc] = useState(null);
-  const [content, setContent] = useState('');
+  const [docData, setDocData] = useState(null); // { type, content, url }
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
@@ -54,12 +60,13 @@ export default function DocumentView() {
     if (!selectedDoc) return;
     const loadContent = async () => {
       setIsLoadingContent(true);
+      setDocData(null);
       try {
-        const text = await fetchDocumentContent(selectedDoc);
-        setContent(typeof text === 'string' ? text : String(text));
+        const data = await fetchDocumentContent(selectedDoc);
+        setDocData(data);
       } catch (err) {
-        console.error('載入筆記內容失敗:', err);
-        setContent('⚠️ 無法載入筆記內容');
+        console.error('載入文件內容失敗:', err);
+        setDocData({ type: 'error', content: '⚠️ 無法載入文件內容', url: null });
       } finally {
         setIsLoadingContent(false);
       }
@@ -69,25 +76,55 @@ export default function DocumentView() {
 
   const formatSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
-    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / 1048576).toFixed(1) + ' MB';
   };
 
-  const formatDate = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleString();
+  const formatDate = (timestamp) => new Date(timestamp * 1000).toLocaleString();
+
+  const renderContent = () => {
+    if (!docData) return null;
+    const { type, content, url } = docData;
+
+    if (type === 'pdf') {
+      return (
+        <iframe
+          src={`${API_BASE}${url}`}
+          className="w-full h-full rounded border-0"
+          title={selectedDoc}
+        />
+      );
+    }
+
+    if (type === 'md') {
+      return (
+        <div className="max-w-4xl mx-auto prose dark:prose-invert prose-sm text-slate-700 dark:text-slate-300">
+          <MarkdownErrorBoundary>
+            <ReactMarkdown>{content}</ReactMarkdown>
+          </MarkdownErrorBoundary>
+        </div>
+      );
+    }
+
+    // txt / docx / error
+    return (
+      <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono leading-relaxed max-w-4xl mx-auto">
+        {content}
+      </pre>
+    );
   };
 
   return (
     <div className="h-full flex gap-3 p-3">
-      {/* 左側 Sidebar：檔案列表 */}
-      <div className="flex-[20] min-w-[250px] max-w-[320px] glass-panel flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-slate-700/50 bg-surface-800/50">
-          <h2 className="text-sm font-semibold flex items-center gap-2 text-slate-300">
+      {/* 左側 Sidebar */}
+      <div className="flex-[20] min-w-[220px] max-w-[300px] glass-panel flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700/50 bg-slate-50/50 dark:bg-surface-800/50">
+          <h2 className="text-sm font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-300">
             <FileText size={16} className="text-accent" />
             已上傳筆記 ({documents.length})
           </h2>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
           {isLoadingList && (
             <div className="flex justify-center p-4">
@@ -95,49 +132,53 @@ export default function DocumentView() {
             </div>
           )}
           {!isLoadingList && documents.length === 0 && (
-            <div className="text-sm text-slate-500 text-center p-4">查無筆記記錄</div>
+            <div className="text-sm text-slate-400 dark:text-slate-500 text-center p-4">查無記錄</div>
           )}
-          {documents.map((doc) => (
-            <button
-              key={doc.filename}
-              onClick={() => setSelectedDoc(doc.filename)}
-              className={`
-                flex flex-col items-start gap-1 p-3 rounded-lg text-left transition-all
-                ${selectedDoc === doc.filename 
-                  ? 'bg-accent/20 border border-accent/30 text-accent-light' 
-                  : 'hover:bg-surface-700/50 text-slate-400 border border-transparent'}
-              `}
-            >
-              <div className="font-semibold text-sm truncate w-full">{doc.filename}</div>
-              <div className="flex gap-3 text-[10px] text-slate-500 opacity-80">
-                <span className="flex items-center gap-1"><HardDrive size={10}/> {formatSize(doc.size)}</span>
-                <span className="flex items-center gap-1"><Clock size={10}/> {formatDate(doc.modified_time)}</span>
-              </div>
-            </button>
-          ))}
+          {documents.map((doc) => {
+            const Icon = FILE_ICONS[doc.type] || FileText;
+            return (
+              <button
+                key={doc.filename}
+                onClick={() => setSelectedDoc(doc.filename)}
+                className={`
+                  flex flex-col items-start gap-1 p-3 rounded-lg text-left transition-all
+                  ${selectedDoc === doc.filename
+                    ? 'bg-accent/10 dark:bg-accent/20 border border-accent/30 text-accent-dark dark:text-accent-light'
+                    : 'hover:bg-slate-100 dark:hover:bg-surface-700/50 text-slate-600 dark:text-slate-400 border border-transparent'}
+                `}
+              >
+                <div className="flex items-center gap-1.5 w-full">
+                  <Icon size={13} className="flex-shrink-0 opacity-60" />
+                  <span className="font-medium text-sm truncate">{doc.filename}</span>
+                </div>
+                <div className="flex gap-3 text-[10px] opacity-60 pl-0.5">
+                  <span className="flex items-center gap-1"><HardDrive size={10} /> {formatSize(doc.size)}</span>
+                  <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(doc.modified_time)}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* 右側主畫面：Markdown 渲染 */}
-      <div className="flex-[80] glass-panel overflow-hidden flex flex-col bg-surface-800/30">
-        <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-200">{selectedDoc || '尚未選擇檔案'}</h2>
+      {/* 右側主畫面 */}
+      <div className="flex-[80] glass-panel overflow-hidden flex flex-col bg-white/30 dark:bg-surface-800/30">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">{selectedDoc || '尚未選擇檔案'}</h2>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-6 md:p-10 relative">
           {isLoadingContent ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loader2 size={32} className="animate-spin text-accent" />
             </div>
-          ) : content ? (
-            <div className="max-w-4xl mx-auto text-slate-300 prose prose-invert prose-sm">
-              <MarkdownErrorBoundary>
-                <ReactMarkdown>{content}</ReactMarkdown>
-              </MarkdownErrorBoundary>
-            </div>
+          ) : docData ? (
+            docData.type === 'pdf'
+              ? <div className="absolute inset-0 p-4">{renderContent()}</div>
+              : renderContent()
           ) : (
-            <div className="h-full flex items-center justify-center text-slate-500">
-              點擊左側清單來檢視筆記內容
+            <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500">
+              點擊左側清單來檢視文件內容
             </div>
           )}
         </div>
