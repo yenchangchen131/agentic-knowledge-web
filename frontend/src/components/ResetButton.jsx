@@ -27,7 +27,7 @@ export default function ResetButton() {
   if (showConfirm) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-red-400">確定清空所有資料？</span>
+        <span className="text-xs text-red-500 dark:text-red-400">確定清空所有資料？</span>
         <button
           onClick={handleReset}
           disabled={isResetting}
@@ -37,7 +37,7 @@ export default function ResetButton() {
         </button>
         <button
           onClick={() => setShowConfirm(false)}
-          className="text-xs text-slate-400 hover:text-white transition-colors px-2 py-1.5"
+          className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors px-2 py-1.5"
         >
           取消
         </button>
@@ -48,7 +48,7 @@ export default function ResetButton() {
   return (
     <button
       onClick={() => setShowConfirm(true)}
-      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-400 transition-colors px-2 py-1.5 rounded-md hover:bg-red-500/10"
+      className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors px-2 py-1.5 rounded-md hover:bg-red-500/10"
     >
       <Trash2 size={14} />
       重置
