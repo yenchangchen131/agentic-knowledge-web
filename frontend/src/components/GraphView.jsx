@@ -24,6 +24,7 @@ export default function GraphView() {
   const markNodeExpanded = useStore((s) => s.markNodeExpanded);
   const expandedNodes = useStore((s) => s.expandedNodes);
   const isGraphLoading = useStore((s) => s.isGraphLoading);
+  const theme = useStore((s) => s.theme);
 
   const fgRef = useRef();
   const containerRef = useRef();
@@ -37,18 +38,31 @@ export default function GraphView() {
         if (typeof fgRef.current.height === 'function') fgRef.current.height(height);
       }
     };
-
     const observer = new ResizeObserver(handleResize);
     if (containerRef.current) observer.observe(containerRef.current);
-
     return () => observer.disconnect();
   }, []);
 
-  // 單擊：選取節點
+  // 自訂 D3 forces（只在掛載時執行一次；graphVersion 變化觸發重新掛載時也會重新執行）
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    // 稍微延遲，等 ForceGraph2D 初始化完成
+    const timer = setTimeout(() => {
+      try {
+        fg.d3Force('link')?.distance(80).strength(0.5);
+        fg.d3Force('charge')?.strength(-180);
+        fg.d3Force('center')?.strength(0.05);
+      } catch (_) {
+        // ForceGraph2D 可能在 warmupTicks 期間還沒有 expose forces
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [graphVersion]);
+
   const handleNodeClick = useCallback(
     (node) => {
       setSelectedNode(node);
-      // 鏡頭聚焦到節點
       if (fgRef.current) {
         fgRef.current.centerAt(node.x, node.y, 500);
         fgRef.current.zoom(2, 500);
@@ -57,10 +71,9 @@ export default function GraphView() {
     [setSelectedNode]
   );
 
-  // 雙擊：展開節點鄰居
-  const handleNodeDoubleClick = useCallback(
+  const handleNodeRightClick = useCallback(
     async (node) => {
-      if (expandedNodes.has(node.id)) return; // 已展開過
+      if (expandedNodes.has(node.id)) return;
       try {
         const result = await expandNode(node.id);
         mergeGraphData(result);
@@ -72,7 +85,21 @@ export default function GraphView() {
     [expandedNodes, mergeGraphData, markNodeExpanded]
   );
 
-  // 自訂節點繪製
+  // 模擬結束後凍結所有節點，避免展開時擾動已穩定節點
+  const handleEngineStop = useCallback(() => {
+    graphData.nodes.forEach((node) => {
+      if (node.x !== undefined && node.fx === undefined) {
+        node.fx = node.x;
+        node.fy = node.y;
+      }
+    });
+  }, [graphData.nodes]);
+
+  const labelColor = theme === 'dark' ? '#e2e8f0' : '#1e293b';
+  const linkColor = theme === 'dark' ? 'rgba(100, 116, 139, 0.3)' : 'rgba(71, 85, 105, 0.35)';
+  const linkLabelColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.6)' : 'rgba(71, 85, 105, 0.7)';
+  const bgColor = theme === 'dark' ? 'transparent' : '#f1f5f9';
+
   const paintNode = useCallback((node, ctx, globalScale) => {
     const label = node.id;
     const fontSize = Math.max(12 / globalScale, 3);
@@ -85,7 +112,7 @@ export default function GraphView() {
     ctx.fillStyle = color + '20';
     ctx.fill();
 
-    // 節點
+    // 節點本體
     ctx.beginPath();
     ctx.arc(node.x, node.y, nodeSize, 0, 2 * Math.PI);
     ctx.fillStyle = color;
@@ -105,26 +132,23 @@ export default function GraphView() {
       ctx.font = `${fontSize}px Inter, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = '#e2e8f0';
+      ctx.fillStyle = labelColor;
       ctx.fillText(label, node.x, node.y + nodeSize + 3);
     }
-  }, [expandedNodes]);
+  }, [expandedNodes, labelColor]);
 
-  // 自訂連結繪製
   const paintLink = useCallback((link, ctx, globalScale) => {
     const start = link.source;
     const end = link.target;
     if (!start || !end || typeof start.x === 'undefined') return;
 
-    // 線條
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
-    ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
+    ctx.strokeStyle = linkColor;
     ctx.lineWidth = 0.5;
     ctx.stroke();
 
-    // 關係文字
     if (globalScale > 1.5 && link.type) {
       const midX = (start.x + end.x) / 2;
       const midY = (start.y + end.y) / 2;
@@ -132,10 +156,10 @@ export default function GraphView() {
       ctx.font = `${fontSize}px Inter, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.fillStyle = linkLabelColor;
       ctx.fillText(link.type, midX, midY);
     }
-  }, []);
+  }, [linkColor, linkLabelColor]);
 
   if (isGraphLoading) {
     return (
@@ -146,7 +170,7 @@ export default function GraphView() {
             <div className="pulse-dot" style={{ animationDelay: '0.2s' }} />
             <div className="pulse-dot" style={{ animationDelay: '0.4s' }} />
           </div>
-          <span className="text-slate-400 text-sm">載入圖譜中...</span>
+          <span className="text-slate-500 dark:text-slate-400 text-sm">載入圖譜中...</span>
         </div>
       </div>
     );
@@ -156,8 +180,8 @@ export default function GraphView() {
     return (
       <div ref={containerRef} className="w-full h-full flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-400 text-lg mb-2">📭 尚無圖譜資料</p>
-          <p className="text-slate-500 text-sm">請上傳 Markdown 檔案以建立知識庫</p>
+          <p className="text-slate-400 dark:text-slate-400 text-lg mb-2">📭 尚無圖譜資料</p>
+          <p className="text-slate-400 dark:text-slate-500 text-sm">請上傳文件以建立知識庫</p>
         </div>
       </div>
     );
@@ -172,27 +196,29 @@ export default function GraphView() {
         nodeId="id"
         nodeCanvasObject={paintNode}
         nodePointerAreaPaint={(node, color, ctx) => {
+          // 點擊範圍比視覺節點大，讓點擊更容易
           const size = Math.max(4, Math.min(node.neighbors?.length || 3, 12));
           ctx.beginPath();
-          ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI);
+          ctx.arc(node.x, node.y, Math.max(10, size + 6), 0, 2 * Math.PI);
           ctx.fillStyle = color;
           ctx.fill();
         }}
         linkCanvasObject={paintLink}
         onNodeClick={handleNodeClick}
-        onNodeRightClick={handleNodeDoubleClick}
+        onNodeRightClick={handleNodeRightClick}
         onNodeDragEnd={(node) => {
           node.fx = node.x;
           node.fy = node.y;
         }}
         onBackgroundClick={() => setSelectedNode(null)}
-        cooldownTicks={100}
-        backgroundColor="transparent"
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
+        onEngineStop={handleEngineStop}
+        warmupTicks={50}
+        cooldownTicks={150}
+        d3AlphaDecay={0.015}
+        d3VelocityDecay={0.4}
+        backgroundColor={bgColor}
       />
-      {/* 雙擊提示 overlay */}
-      <div className="absolute bottom-4 left-4 text-xs text-slate-500 select-none pointer-events-none">
+      <div className="absolute bottom-4 left-4 text-xs text-slate-400 dark:text-slate-500 select-none pointer-events-none">
         單擊選取 · 右鍵展開 · 拖拽移動
       </div>
     </div>
