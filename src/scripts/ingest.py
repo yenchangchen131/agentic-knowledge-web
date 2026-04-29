@@ -12,6 +12,8 @@ from src.scripts.llm import create_llm
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_EXTENSIONS = {".md", ".txt", ".pdf", ".docx"}
+
 EXTRACT_PROMPT = """你是一個知識圖譜抽取專家。
 請從以下文字中抽取實體與關係，並以 JSON 格式回傳。
 
@@ -44,11 +46,37 @@ def chunk_markdown(file_path: str) -> list:
     logger.info("檔案 %s 切成 %d 個 chunks", file_path, len(chunks))
     return chunks
 
+
+def load_and_chunk(file_path: str) -> list:
+    """根據副檔名分派到對應的 loader，然後統一切塊"""
+    ext = Path(file_path).suffix.lower()
+
+    if ext == ".md":
+        return chunk_markdown(file_path)
+
+    if ext == ".txt":
+        from langchain_community.document_loaders import TextLoader
+        loader = TextLoader(file_path, encoding="utf-8")
+    elif ext == ".pdf":
+        from langchain_community.document_loaders import PyPDFLoader
+        loader = PyPDFLoader(file_path)
+    elif ext == ".docx":
+        from langchain_community.document_loaders import Docx2txtLoader
+        loader = Docx2txtLoader(file_path)
+    else:
+        raise ValueError(f"不支援的檔案格式: {ext}")
+
+    docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = splitter.split_documents(docs)
+    logger.info("檔案 %s 切成 %d 個 chunks", file_path, len(chunks))
+    return chunks
+
+
 def extract_graph(text: str, llm) -> dict:
     """用 LLM 從文字中抽取實體與關係"""
     prompt = EXTRACT_PROMPT.format(text=text)
     response = llm.invoke(prompt)
-    # 清理 LLM 可能回傳的 markdown 代碼塊
     content = response.content.strip()
     if content.startswith("```"):
         content = content.split("```")[1]
@@ -60,15 +88,15 @@ def extract_graph(text: str, llm) -> dict:
         logger.warning("LLM 回傳格式錯誤，跳過此 chunk:\n%s", content)
         return {"entities": [], "relations": []}
 
+
 def ingest_file_stream(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
-    """處理單一 Markdown 檔案，以串流方式 yield 處理進度"""
+    """處理單一檔案，以串流方式 yield 處理進度"""
     if llm is None:
         llm = create_llm()
     logger.info("開始處理: %s", file_path)
-    chunks = chunk_markdown(file_path)
+    chunks = load_and_chunk(file_path)
     total_chunks = len(chunks)
 
-    # 初始進度
     yield {"status": "processing", "progress": 0, "total": total_chunks, "filename": Path(file_path).name}
 
     for i, chunk in enumerate(chunks):
@@ -89,7 +117,7 @@ def ingest_file_stream(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient,
                 relation["target"],
                 relation["type"]
             )
-            
+
         yield {"status": "processing", "progress": i + 1, "total": total_chunks, "filename": Path(file_path).name}
 
     logger.info("完成處理: %s，共 %d chunks", file_path, total_chunks)
@@ -97,18 +125,22 @@ def ingest_file_stream(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient,
 
 
 def ingest_file(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
-    """處理單一 Markdown 檔案，寫入向量庫與知識圖譜 (相容舊有同步呼叫)"""
     for _ in ingest_file_stream(file_path, neo4j, chroma, llm):
         pass
 
+
 def ingest_directory(dir_path: str, neo4j: Neo4jClient, chroma: ChromaClient, llm=None):
-    """處理整個資料夾中的所有 Markdown 檔案"""
+    """處理整個資料夾中的所有支援格式檔案"""
     if llm is None:
         llm = create_llm()
-    md_files = list(Path(dir_path).glob("**/*.md"))
-    logger.info("找到 %d 個 Markdown 檔案", len(md_files))
-    for file_path in md_files:
+    all_files = [
+        f for f in Path(dir_path).rglob("*")
+        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+    ]
+    logger.info("找到 %d 個可處理檔案", len(all_files))
+    for file_path in all_files:
         ingest_file(str(file_path), neo4j, chroma, llm)
+
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -119,7 +151,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="./data", help="Markdown 檔案或資料夾路徑(預設: %(default)s)")
+    parser.add_argument("--input", default="./data", help="檔案或資料夾路徑(預設: %(default)s)")
     args = parser.parse_args()
 
     llm = create_llm()

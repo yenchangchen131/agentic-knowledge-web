@@ -33,7 +33,7 @@ graph TD
 
 **技術棧：**
 
-- **前端介面**：React 19, Vite, Tailwind CSS v3, Zustand, react-force-graph-2d
+- **前端介面**：React 19, Vite, Tailwind CSS v3, Zustand, react-force-graph-2d, react-resizable-panels
 - **後端 API**：FastAPI
 - **大腦層**：LangGraph + Multi-agent
 - **記憶層**：Neo4j（知識圖譜，本地運行）+ Chroma（向量資料庫，本地持久化）
@@ -65,13 +65,17 @@ uv run python -m uvicorn main:app --reload
 
 # 6. 啟動前端開發伺服器（請另開一個終端機）
 cd frontend
-cmd /c npm install
-cmd /c npm run dev
+npm install
+npm run dev
 # 前端介面將運行在 http://localhost:5173
 ```
 
-> **操作小提示**：
-> 打開瀏覽器進入前端畫面後，可以直接透過畫面左下方的按鈕**拖拽或上傳 Markdown (.md) 筆記檔案**。系統會自動進行向量寫入及圖譜實體抽取，成功後圖譜將自動在畫面上渲染出來。你可以支援**點擊節點查看詳情**、**右鍵點擊展開鄰居**，以及在此同時於右側聊天室**直接對指定概念呼叫 Agent 詢問問題**。
+> **操作說明**：
+> - **上傳文件**：支援 `.md`、`.txt`、`.pdf`、`.docx` 格式，拖拽或點擊上傳後系統自動進行向量寫入及知識圖譜實體抽取。
+> - **圖譜互動**：左鍵點擊選取節點，右鍵展開鄰居節點，拖拽固定節點位置。
+> - **AI 問答**：點擊節點的「詢問 AI」按鈕可針對特定概念提問，或直接在聊天室輸入問題。
+> - **筆記瀏覽**：切換到「筆記庫」分頁可瀏覽已上傳文件，Markdown 渲染、PDF 嵌入預覽均支援。
+> - **主題切換**：右上角按鈕可在淺色 / 深色主題間切換，設定自動記憶。
 
 ## Project Structure
 
@@ -80,14 +84,14 @@ agentic-knowledge-web/
 ├── frontend/                    # Vite + React 前端專案
 │   ├── src/
 │   │   ├── components/          # 視覺圖譜、對話視窗、節點資訊等 UI 元件
-│   │   ├── store/               # Zustand 全域狀態管理
+│   │   ├── store/               # Zustand 全域狀態管理（含主題切換）
 │   │   └── lib/                 # axios API 呼叫封裝
 │   └── package.json
 ├── src/
-│   ├── api/                     # FastAPI Router 層 (chat, graph, ingest, reset)
+│   ├── api/                     # FastAPI Router 層 (chat, graph, ingest, reset, documents)
 │   ├── agents/                  # LangGraph Supervisor 與 Retriever Agents
 │   ├── database/                # Neo4j 客戶端 (含圖譜檢索邏輯) 與 Chroma 客戶端
-│   └── scripts/                 # CLI 與共用設定 (llm.py)
+│   └── scripts/                 # CLI 與共用設定 (llm.py, ingest.py)
 ├── main.py                      # FastAPI 主程式入口點
 ├── pyproject.toml               # 專案 Python 依賴管理 (Hatchling)
 ├── .env.example                 # 環境變數範例
@@ -96,7 +100,11 @@ agentic-knowledge-web/
 
 ## Features
 
+- **✅ 多格式文件支援**：`.md`、`.txt`、`.pdf`、`.docx` 均可上傳，自動進行向量嵌入與知識圖譜抽取。
 - **✅ 雙引擎混合檢索**：結合 Chroma 的語義相似度與 Neo4j 的知識圖譜邏輯關聯，減少大模型幻覺。
-- **✅ 力導向圖譜互動化**：透過 `react-force-graph` 高效渲染巨量節點，支援拖曳探索、右鍵動態展開未知的關聯網路。
-- **✅ 容錯機制與獨立運作**：具備檢索保護機制，遇到特定模型限制（如部分 Embedding 返回 NaN）時會無縫轉向純圖譜檢索。
-- **✅ 一鍵整合分析**：支援從圖譜單個節點觸發聊天，引導大腦層針對單點深度推理。
+- **✅ 力導向圖譜互動化**：透過 `react-force-graph` 高效渲染節點，物理模擬優化避免初始爆炸，支援右鍵動態展開關聯網路。
+- **✅ 可調整版面**：左右面板（圖譜 / 控制）與上下面板（對話 / 節點資訊）均支援拖拽調整大小。
+- **✅ Markdown 渲染**：AI 回覆與 Markdown 筆記均以完整格式渲染，包含標題、列表、程式碼區塊。
+- **✅ 多格式文件瀏覽**：筆記庫支援 Markdown 渲染、PDF 嵌入預覽、DOCX / TXT 純文字顯示。
+- **✅ 深/淺主題切換**：右上角一鍵切換，設定記憶於 localStorage。
+- **✅ 容錯機制**：Embedding 異常時自動降級為純圖譜檢索，ingestion 進度即時串流顯示。

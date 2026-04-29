@@ -17,7 +17,6 @@ export default function ChatWindow() {
   const inputRef = useRef(null);
   const [localInput, setLocalInput] = useState('');
 
-  // 同步 store 的 chatInput（由 NodeInfoPanel 的「詢問 AI」按鈕寫入）
   useEffect(() => {
     if (chatInput) {
       setLocalInput(chatInput);
@@ -26,7 +25,6 @@ export default function ChatWindow() {
     }
   }, [chatInput, setChatInput]);
 
-  // 自動捲動到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -35,7 +33,6 @@ export default function ChatWindow() {
     const question = localInput.trim();
     if (!question || isChatLoading) return;
 
-    // 加入使用者訊息
     addMessage({ id: Date.now() + '-user', role: 'user', content: question });
     setLocalInput('');
     setIsChatLoading(true);
@@ -64,8 +61,8 @@ export default function ChatWindow() {
   return (
     <>
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-2.5 border-b border-slate-700/50">
-        <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+      <div className="flex-shrink-0 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/50">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
           💬 Agent 聊天室
         </h3>
       </div>
@@ -74,19 +71,19 @@ export default function ChatWindow() {
       <div className="flex-1 overflow-auto p-4 flex flex-col gap-3">
         {messages.length === 0 && (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-slate-500 text-sm text-center">
+            <p className="text-slate-400 dark:text-slate-500 text-sm text-center">
               輸入問題開始對話，或點擊節點的「詢問 AI」按鈕
             </p>
           </div>
         )}
 
-        {messages.map((msg, i) => (
+        {messages.map((msg) => (
           <div
             key={msg.id}
             className={`fade-in ${msg.role === 'user' ? 'msg-user' : 'msg-ai'}`}
           >
             {msg.role === 'ai' ? (
-              <div className="prose prose-invert prose-sm max-w-none">
+              <div className="prose dark:prose-invert prose-sm max-w-none">
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             ) : (
@@ -97,7 +94,7 @@ export default function ChatWindow() {
 
         {isChatLoading && (
           <div className="msg-ai fade-in">
-            <div className="flex items-center gap-2 text-sm text-slate-400">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <Loader2 size={14} className="animate-spin" />
               Agent 思考中...
             </div>
@@ -108,7 +105,7 @@ export default function ChatWindow() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 p-3 border-t border-slate-700/50">
+      <div className="flex-shrink-0 p-3 border-t border-slate-200 dark:border-slate-700/50">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -118,7 +115,7 @@ export default function ChatWindow() {
             onKeyDown={handleKeyDown}
             placeholder="輸入問題..."
             disabled={isChatLoading}
-            className="flex-1 bg-surface-800 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-accent/50 transition-colors disabled:opacity-50"
+            className="flex-1 bg-slate-100 dark:bg-surface-800 border border-slate-300 dark:border-slate-600/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-accent/50 transition-colors disabled:opacity-50"
           />
           <button
             onClick={handleSend}

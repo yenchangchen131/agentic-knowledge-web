@@ -1,15 +1,26 @@
 // src/store/useStore.js
 import { create } from 'zustand';
 
+// Apply saved theme on module load (before first render)
+const _savedTheme = localStorage.getItem('theme') || 'light';
+if (_savedTheme === 'dark') {
+  document.documentElement.classList.add('dark');
+} else {
+  document.documentElement.classList.remove('dark');
+}
+
 const useStore = create((set, get) => ({
   // ─── 圖譜狀態 ───
   graphData: { nodes: [], links: [] },
-  graphVersion: 0, // 遞增以強制 ForceGraph 重新掛載
+  graphVersion: 0,
   selectedNode: null,
-  expandedNodes: new Set(), // 已展開的節點
+  expandedNodes: new Set(),
 
   // ─── 視圖狀態 ───
   viewMode: 'graph', // 'graph' | 'document'
+
+  // ─── 主題狀態 ───
+  theme: _savedTheme, // 'light' | 'dark'
 
   // ─── 聊天狀態 ───
   messages: [],
@@ -61,6 +72,18 @@ const useStore = create((set, get) => ({
 
   // ─── UI Actions ───
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  toggleTheme: () => {
+    const current = get().theme;
+    const next = current === 'light' ? 'dark' : 'light';
+    if (next === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', next);
+    set({ theme: next });
+  },
 
   // ─── 聊天 Actions ───
   setChatInput: (text) => set({ chatInput: text }),

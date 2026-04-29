@@ -93,13 +93,12 @@ export async function fetchDocuments() {
   return data.documents;
 }
 
-/** 取得特定 Markdown 檔案內容 */
+/** 取得特定文件內容，回傳 { type, content, url } */
 export async function fetchDocumentContent(filename) {
-  const { data } = await api.get(`/api/documents/${encodeURIComponent(filename)}`, {
-    responseType: 'text',
-    transformResponse: [(data) => data],  // 不要嘗試 JSON parse
-  });
+  const { data } = await api.get(`/api/documents/${encodeURIComponent(filename)}`);
   return data;
 }
+
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default api;
