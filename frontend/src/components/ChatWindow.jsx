@@ -15,6 +15,7 @@ export default function ChatWindow() {
   const setHighlightedNodes = useStore((s) => s.setHighlightedNodes);
   const setOpenDocument = useStore((s) => s.setOpenDocument);
   const setViewMode = useStore((s) => s.setViewMode);
+  const isUploading = useStore((s) => s.isUploading);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -97,24 +98,6 @@ export default function ChatWindow() {
           >
             {msg.role === 'ai' ? (
               <div className="text-sm">
-                {/* 檢索透明度：抽取關鍵字 */}
-                {msg.extracted_entities?.length > 0 && (
-                  <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-medium">🔍</span>
-                    {msg.extracted_entities.map((e) => (
-                      <span key={e} className="px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">{e}</span>
-                    ))}
-                  </div>
-                )}
-                {/* 檢索透明度：用到的圖譜節點 */}
-                {msg.used_entities?.length > 0 && (
-                  <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-medium">🌐</span>
-                    {msg.used_entities.map((e) => (
-                      <span key={e} className="px-1.5 py-0.5 rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300">{e}</span>
-                    ))}
-                  </div>
-                )}
                 {/* 答案主體 */}
                 <div className="prose dark:prose-invert prose-sm max-w-none">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -158,7 +141,7 @@ export default function ChatWindow() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 p-3 border-t border-slate-200 dark:border-slate-700/50">
+      <div className="flex-shrink-0 p-3 border-t border-slate-200 dark:border-slate-700/50 relative">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -167,17 +150,24 @@ export default function ChatWindow() {
             onChange={(e) => setLocalInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="輸入問題..."
-            disabled={isChatLoading}
-            className="flex-1 bg-slate-100 dark:bg-surface-800 border border-slate-300 dark:border-slate-600/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-accent/50 transition-colors disabled:opacity-50"
+            disabled={isChatLoading || isUploading}
+            className="flex-1 min-w-0 bg-slate-100 dark:bg-surface-800 border border-slate-300 dark:border-slate-600/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-accent/50 transition-colors disabled:opacity-50"
           />
           <button
             onClick={handleSend}
-            disabled={isChatLoading || !localInput.trim()}
-            className="btn-accent flex items-center justify-center !p-2.5"
+            disabled={isChatLoading || isUploading || !localInput.trim()}
+            className="btn-accent flex-shrink-0 flex items-center justify-center w-9 h-9 !p-0 disabled:opacity-50"
           >
             <Send size={16} />
           </button>
         </div>
+        {isUploading && (
+          <div className="absolute inset-0 z-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center cursor-not-allowed">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium bg-white/80 dark:bg-slate-800/80 px-2 py-1 rounded">
+              資料上傳中，請稍候
+            </span>
+          </div>
+        )}
       </div>
     </>
   );
