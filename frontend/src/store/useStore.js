@@ -36,6 +36,7 @@ const useStore = create((set, get) => ({
   // ─── 全域狀態 ───
   stats: null,
   isGraphLoading: false,
+  isUploading: false,
 
   // ─── 圖譜 Actions ───
   setGraphData: (data) => set((state) => ({
@@ -120,6 +121,7 @@ const useStore = create((set, get) => ({
   // ─── 全域 Actions ───
   setStats: (stats) => set({ stats }),
   setIsGraphLoading: (v) => set({ isGraphLoading: v }),
+  setIsUploading: (v) => set({ isUploading: v }),
 
   resetAll: () => {
     const { _highlightTimerId } = get();

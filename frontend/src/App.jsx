@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import Layout from './components/Layout';
 import DocumentView from './components/DocumentView';
 import StatsBar from './components/StatsBar';
+import FileUpload from './components/FileUpload';
+import ResetButton from './components/ResetButton';
 import { fetchGraphInit, fetchGraphStats } from './lib/api';
 import useStore from './store/useStore';
 import { Network, BookOpen, Sun, Moon } from 'lucide-react';
@@ -15,12 +17,14 @@ function App() {
   const theme = useStore((s) => s.theme);
   const toggleTheme = useStore((s) => s.toggleTheme);
 
+  const isUploading = useStore((s) => s.isUploading);
+
   useEffect(() => {
     const loadData = async () => {
       setIsGraphLoading(true);
       try {
         const [graphData, stats] = await Promise.all([
-          fetchGraphInit(80),
+          fetchGraphInit(500),
           fetchGraphStats(),
         ]);
         setGraphData(graphData);
@@ -75,6 +79,9 @@ function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            <FileUpload />
+            <ResetButton />
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
             <StatsBar />
             {/* 深/淺主題切換 */}
             <button
@@ -89,7 +96,7 @@ function App() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden relative">
         {viewMode === 'graph' ? <Layout /> : <DocumentView />}
       </main>
     </div>

@@ -14,6 +14,7 @@ function isAccepted(filename) {
 export default function FileUpload() {
   const setGraphData = useStore((s) => s.setGraphData);
   const setStats = useStore((s) => s.setStats);
+  const setIsUploading = useStore((s) => s.setIsUploading);
   const [status, setStatus] = useState('idle'); // idle | uploading | success | error
   const [message, setMessage] = useState('');
   const [progress, setProgress] = useState(0);
@@ -32,6 +33,7 @@ export default function FileUpload() {
     setMessage(`上傳 ${file.name}...`);
     setProgress(0);
     setTotal(0);
+    setIsUploading(true);
 
     try {
       const result = await uploadFile(file, (data) => {
@@ -56,6 +58,8 @@ export default function FileUpload() {
       setStatus('error');
       setMessage(`❌ ${err.response?.data?.detail || err.message}`);
       setTimeout(() => setStatus('idle'), 5000);
+    } finally {
+      setIsUploading(false);
     }
   };
 
