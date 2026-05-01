@@ -108,14 +108,16 @@ def ingest_file_stream(file_path: str, neo4j: Neo4jClient, chroma: ChromaClient,
 
         graph_data = extract_graph(text, llm)
 
+        source_filename = Path(file_path).name
         for entity in graph_data.get("entities", []):
-            neo4j.create_entity(entity["name"], entity["type"])
+            neo4j.create_entity(entity["name"], entity["type"], source=source_filename)
 
         for relation in graph_data.get("relations", []):
             neo4j.create_relation(
                 relation["source"],
                 relation["target"],
-                relation["type"]
+                relation["type"],
+                source_file=source_filename
             )
 
         yield {"status": "processing", "progress": i + 1, "total": total_chunks, "filename": Path(file_path).name}

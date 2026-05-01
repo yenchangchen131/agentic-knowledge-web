@@ -44,8 +44,8 @@ class Neo4jClient:
             )
             return result.single()["count"] > 0
 
-    def create_entity(self, name: str, entity_type: str, properties: dict | None = None):
-        """寫入一個實體節點，已存在則更新"""
+    def create_entity(self, name: str, entity_type: str, properties: dict | None = None, source: str | None = None):
+        """寫入一個實體節點，已存在則更新；若提供 source 則追加到 sources 列表"""
         if properties is None:
             properties = {}
 
@@ -54,10 +54,19 @@ class Neo4jClient:
         action = "更新" if self.entity_exists(name) else "寫入"
 
         with self.driver.session() as session:
-            # 使用 f-string 動態插入標籤，並用反引號包覆處理中文或空格
-            # 格式例如: MERGE (n:Entity:`概念` {name: $name})
             query = f"MERGE (n:Entity {{name: $name}}) SET n:`{clean_type}`, n += $props"
             session.run(query, name=name, props=properties)
+
+            if source:
+                session.run(
+                    "MATCH (n:Entity {name: $name}) "
+                    "SET n.sources = CASE "
+                    "  WHEN n.sources IS NULL THEN [$source] "
+                    "  WHEN $source IN n.sources THEN n.sources "
+                    "  ELSE n.sources + [$source] "
+                    "END",
+                    name=name, source=source
+                )
 
         logger.info("實體%s成功: %s (%s)", action, name, entity_type)
 
@@ -73,14 +82,10 @@ class Neo4jClient:
             result = session.run(query, source=source, target=target)
             return result.single()["count"] > 0
 
-    def create_relation(self, source: str, target: str, relation_type: str):
-        """寫入關係，已存在則跳過"""
+    def create_relation(self, source: str, target: str, relation_type: str, source_file: str | None = None):
+        """寫入關係，已存在則跳過（或補充 source_file）；若提供 source_file 則追加到 sources"""
         clean_rel = self._sanitize(relation_type)
-        
-        if self.relation_exists(source, target, relation_type):
-            logger.debug("關係已存在，跳過: %s -[%s]-> %s", source, clean_rel, target)
-            return
-            
+
         with self.driver.session() as session:
             query = (
                 "MATCH (a:Entity {name: $source}) "
@@ -88,7 +93,18 @@ class Neo4jClient:
                 f"MERGE (a)-[r:`{clean_rel}`]->(b)"
             )
             session.run(query, source=source, target=target)
-            
+
+            if source_file:
+                update_q = (
+                    f"MATCH (a:Entity {{name: $source}})-[r:`{clean_rel}`]->(b:Entity {{name: $target}}) "
+                    "SET r.sources = CASE "
+                    "  WHEN r.sources IS NULL THEN [$sf] "
+                    "  WHEN $sf IN r.sources THEN r.sources "
+                    "  ELSE r.sources + [$sf] "
+                    "END"
+                )
+                session.run(update_q, source=source, target=target, sf=source_file)
+
         logger.info("關係寫入成功: %s -[%s]-> %s", source, clean_rel, target)
 
     def delete_entity(self, name: str):
@@ -200,6 +216,47 @@ class Neo4jClient:
 
             logger.info("展開節點 %s: %d 鄰居, %d 關係", name, len(nodes_map), len(links))
             return {"nodes": list(nodes_map.values()), "links": links}
+
+    def get_entity_sources(self, name: str) -> list:
+        """回傳某個節點所屬的來源文件列表"""
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (n:Entity {name: $name}) RETURN coalesce(n.sources, []) AS sources",
+                name=name
+            )
+            record = result.single()
+            return list(record["sources"]) if record else []
+
+    def delete_by_source(self, filename: str) -> dict:
+        """刪除來源為 filename 的所有節點與關係。
+        先從 sources 移除該檔名，再刪除 sources 為空的節點/關係。"""
+        with self.driver.session() as session:
+            # 關係：從 sources 移除，若空則刪除
+            session.run(
+                "MATCH ()-[r]->() WHERE $file IN coalesce(r.sources, []) "
+                "SET r.sources = [s IN r.sources WHERE s <> $file]",
+                file=filename
+            )
+            rel_result = session.run(
+                "MATCH ()-[r]->() WHERE r.sources IS NOT NULL AND size(r.sources) = 0 "
+                "DELETE r RETURN count(r) AS cnt"
+            )
+            deleted_relations = rel_result.single()["cnt"]
+
+            # 節點：從 sources 移除，若空則 DETACH DELETE
+            session.run(
+                "MATCH (n:Entity) WHERE $file IN coalesce(n.sources, []) "
+                "SET n.sources = [s IN n.sources WHERE s <> $file]",
+                file=filename
+            )
+            node_result = session.run(
+                "MATCH (n:Entity) WHERE n.sources IS NOT NULL AND size(n.sources) = 0 "
+                "DETACH DELETE n RETURN count(n) AS cnt"
+            )
+            deleted_entities = node_result.single()["cnt"]
+
+        logger.info("刪除來源 %s：%d 節點，%d 關係", filename, deleted_entities, deleted_relations)
+        return {"deleted_entities": deleted_entities, "deleted_relations": deleted_relations}
 
     def get_stats(self) -> dict:
         """取得圖譜統計資訊"""
