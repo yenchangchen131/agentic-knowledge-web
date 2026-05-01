@@ -31,6 +31,7 @@ export default function GraphView() {
 
   const fgRef = useRef();
   const containerRef = useRef();
+  const hasInitialFit = useRef(false);
 
   // 自適應容器尺寸
   useEffect(() => {
@@ -46,31 +47,44 @@ export default function GraphView() {
     return () => observer.disconnect();
   }, []);
 
-  // 自訂 D3 forces
+  // 重置初始 fit 旗標並設定緊湊 forces
   useEffect(() => {
+    hasInitialFit.current = false;
     const fg = fgRef.current;
     if (!fg) return;
     const timer = setTimeout(() => {
       try {
-        fg.d3Force('link')?.distance(60).strength(0.3);
-        fg.d3Force('charge')?.strength(-120);
-        fg.d3Force('center')?.strength(0.05);
+        fg.d3Force('link')?.distance(30).strength(0.8);
+        fg.d3Force('charge')?.strength(-60);
+        fg.d3Force('center')?.strength(0.5);
       } catch (_) {}
     }, 50);
     return () => clearTimeout(timer);
   }, [graphVersion]);
 
-  // 當 highlightedNodes 變化時，reheat 模擬（確保重繪）並 zoom to fit
+  // 模擬穩定後第一次自動 fit 全圖
+  const handleEngineStop = useCallback(() => {
+    if (!hasInitialFit.current && fgRef.current) {
+      hasInitialFit.current = true;
+      fgRef.current.zoomToFit(400, 40);
+    }
+  }, []);
+
+  // 高亮節點：reheat 確保重繪，並聚焦到節點群組中心（不過度放大）
   useEffect(() => {
     if (highlightedNodes.size === 0 || !fgRef.current) return;
     fgRef.current.d3ReheatSimulation();
     const timer = setTimeout(() => {
-      if (fgRef.current) {
-        fgRef.current.zoomToFit(800, 80, (n) => highlightedNodes.has(n.id));
-      }
+      if (!fgRef.current) return;
+      const pts = graphData.nodes.filter((n) => highlightedNodes.has(n.id) && n.x !== undefined);
+      if (pts.length === 0) return;
+      const cx = pts.reduce((s, n) => s + n.x, 0) / pts.length;
+      const cy = pts.reduce((s, n) => s + n.y, 0) / pts.length;
+      fgRef.current.centerAt(cx, cy, 600);
+      fgRef.current.zoom(2, 600);
     }, 300);
     return () => clearTimeout(timer);
-  }, [highlightedNodes]);
+  }, [highlightedNodes, graphData.nodes]);
 
   const handleNodeClick = useCallback(
     (node) => {
@@ -113,8 +127,8 @@ export default function GraphView() {
 
   const paintNode = useCallback((node, ctx, globalScale) => {
     const label = node.id;
-    const fontSize = Math.max(12 / globalScale, 3);
-    const nodeSize = Math.max(4, Math.min(node.neighbors?.length || 3, 12));
+    const fontSize = Math.max(13 / globalScale, 4);
+    const nodeSize = Math.max(6, Math.min((node.neighbors?.length || 4) * 1.5, 14));
     const color = getNodeColor(node);
     const isHighlighted = highlightedNodes.has(node.id);
 
@@ -154,14 +168,12 @@ export default function GraphView() {
       ctx.stroke();
     }
 
-    // 標籤
-    if (globalScale > 0.8) {
-      ctx.font = `${fontSize}px Inter, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = isHighlighted ? color : labelColor;
-      ctx.fillText(label, node.x, node.y + nodeSize + 3);
-    }
+    // 標籤（永遠顯示）
+    ctx.font = `${fontSize}px Inter, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = isHighlighted ? color : labelColor;
+    ctx.fillText(label, node.x, node.y + nodeSize + 2);
   }, [expandedNodes, highlightedNodes, labelColor]);
 
   const paintLink = useCallback((link, ctx, globalScale) => {
@@ -223,9 +235,9 @@ export default function GraphView() {
         nodeId="id"
         nodeCanvasObject={paintNode}
         nodePointerAreaPaint={(node, color, ctx) => {
-          const size = Math.max(4, Math.min(node.neighbors?.length || 3, 12));
+          const size = Math.max(6, Math.min((node.neighbors?.length || 4) * 1.5, 14));
           ctx.beginPath();
-          ctx.arc(node.x, node.y, Math.max(10, size + 6), 0, 2 * Math.PI);
+          ctx.arc(node.x, node.y, Math.max(12, size + 6), 0, 2 * Math.PI);
           ctx.fillStyle = color;
           ctx.fill();
         }}
@@ -237,9 +249,10 @@ export default function GraphView() {
           node.fy = node.y;
         }}
         onBackgroundClick={() => setSelectedNode(null)}
-        warmupTicks={0}
+        onEngineStop={handleEngineStop}
+        warmupTicks={80}
         cooldownTicks={Infinity}
-        d3AlphaDecay={0.003}
+        d3AlphaDecay={0.02}
         d3VelocityDecay={0.4}
         backgroundColor={bgColor}
       />
