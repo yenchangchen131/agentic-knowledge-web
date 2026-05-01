@@ -1,9 +1,23 @@
 // src/components/GraphView.jsx
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { RotateCw } from 'lucide-react';
 import useStore from '../store/useStore';
 import { expandNode, fetchGraphInit } from '../lib/api';
+
+// 自訂引力 (Gravity)：將所有節點向中心輕微拉扯，防止孤立的子圖或群集漂離太遠
+function makeGravityForce(strength = 0.01) {
+  let nodes = [];
+  const force = (alpha) => {
+    for (const node of nodes) {
+      if (node.fx != null) continue;
+      node.vx -= (node.x || 0) * strength * alpha;
+      node.vy -= (node.y || 0) * strength * alpha;
+    }
+  };
+  force.initialize = (n) => { nodes = n; };
+  return force;
+}
 
 const NODE_COLORS = {
   '概念': '#6366f1',
@@ -33,44 +47,66 @@ export default function GraphView() {
   const containerRef = useRef();
   const hasInitialFit = useRef(false);
 
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
   // 自適應容器尺寸
   useEffect(() => {
     const handleResize = () => {
-      if (fgRef.current && containerRef.current) {
+      if (containerRef.current) {
         const { width, height } = containerRef.current.getBoundingClientRect();
-        if (typeof fgRef.current.width === 'function') fgRef.current.width(width);
-        if (typeof fgRef.current.height === 'function') fgRef.current.height(height);
+        setDimensions({ width, height });
+        // 同步更新內部 canvas 尺寸，避免不一致
+        if (fgRef.current) {
+          if (typeof fgRef.current.width === 'function') fgRef.current.width(width);
+          if (typeof fgRef.current.height === 'function') fgRef.current.height(height);
+        }
       }
     };
     const observer = new ResizeObserver(handleResize);
     if (containerRef.current) observer.observe(containerRef.current);
+    // 初始觸發一次
+    handleResize();
     return () => observer.disconnect();
   }, []);
 
-  // 重置初始 fit 旗標並設定緊湊 forces
+  // 重置初始 fit 旗標並設定自然展開的 forces
   useEffect(() => {
     hasInitialFit.current = false;
     const fg = fgRef.current;
     if (!fg) return;
+
+    // 初始強制縮小，讓節點在畫面上慢慢彈開時不會飛出視窗 (看起來太局部)
+    fg.zoom(0.7);
+
     const timer = setTimeout(() => {
       try {
-        fg.d3Force('link')?.distance(30).strength(0.8);
-        fg.d3Force('charge')?.strength(-60);
-        fg.d3Force('center')?.strength(0.5);
-      } catch (_) {}
+        // 設定較長的連線距離，讓放射狀結構能展開
+        fg.d3Force('link')?.distance(60).strength(0.8);
+        // 排斥力調小，讓彈開過程變慢、變柔和
+        fg.d3Force('charge')?.strength(-120).distanceMax(400);
+        // 降低 center force，依賴引力
+        fg.d3Force('center')?.strength(0.05);
+        // 增強向心引力，讓群跟群之間的距離縮短，且有慢慢收攏的感覺
+        fg.d3Force('gravity', makeGravityForce(0.02));
+
+        // 移除前次實作可能留下的自訂 force
+        fg.d3Force('bounding', null);
+        fg.d3Force('radial', null);
+      } catch (_) { }
+      fg.d3ReheatSimulation();
     }, 50);
     return () => clearTimeout(timer);
-  }, [graphVersion]);
+  }, [graphVersion, graphData.nodes.length]);
 
   // 模擬穩定後第一次自動 fit 全圖
   const handleEngineStop = useCallback(() => {
     if (!hasInitialFit.current && fgRef.current) {
       hasInitialFit.current = true;
-      fgRef.current.zoomToFit(400, 40);
+      fgRef.current.zoomToFit(400, 80);
     }
   }, []);
 
-  // 高亮節點：reheat 確保重繪，並聚焦到節點群組中心（不過度放大）
+  // 高亮節點：reheat 確保重繪，並聚焦到節點群組中心（不改變縮放層級）
   useEffect(() => {
     if (highlightedNodes.size === 0 || !fgRef.current) return;
     fgRef.current.d3ReheatSimulation();
@@ -80,8 +116,8 @@ export default function GraphView() {
       if (pts.length === 0) return;
       const cx = pts.reduce((s, n) => s + n.x, 0) / pts.length;
       const cy = pts.reduce((s, n) => s + n.y, 0) / pts.length;
+      // 只平移到中心，不改變縮放層級
       fgRef.current.centerAt(cx, cy, 600);
-      fgRef.current.zoom(2, 600);
     }, 300);
     return () => clearTimeout(timer);
   }, [highlightedNodes, graphData.nodes]);
@@ -113,12 +149,18 @@ export default function GraphView() {
 
   const handleRefresh = useCallback(async () => {
     try {
-      const data = await fetchGraphInit();
+      const data = await fetchGraphInit(500);
       setGraphData(data);
+      setSelectedNode(null);
+      useStore.getState().clearHighlightedNodes();
+      useStore.setState({ expandedNodes: new Set() });
+
+      // 確保重整後能重新觸發自動 fit
+      hasInitialFit.current = false;
     } catch (err) {
       console.error('重整圖譜失敗:', err);
     }
-  }, [setGraphData]);
+  }, [setGraphData, setSelectedNode]);
 
   const labelColor = theme === 'dark' ? '#e2e8f0' : '#1e293b';
   const linkColor = theme === 'dark' ? 'rgba(100, 116, 139, 0.3)' : 'rgba(71, 85, 105, 0.35)';
@@ -168,12 +210,14 @@ export default function GraphView() {
       ctx.stroke();
     }
 
-    // 標籤（永遠顯示）
-    ctx.font = `${fontSize}px Inter, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = isHighlighted ? color : labelColor;
-    ctx.fillText(label, node.x, node.y + nodeSize + 2);
+    // 標籤（縮小到一定程度後隱藏）
+    if (globalScale > 0.5 || isHighlighted) {
+      ctx.font = `${fontSize}px Inter, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = isHighlighted ? color : labelColor;
+      ctx.fillText(label, node.x, node.y + nodeSize + 2);
+    }
   }, [expandedNodes, highlightedNodes, labelColor]);
 
   const paintLink = useCallback((link, ctx, globalScale) => {
@@ -227,10 +271,12 @@ export default function GraphView() {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full">
+    <div ref={containerRef} className="w-full h-full relative">
       <ForceGraph2D
         key={graphVersion}
         ref={fgRef}
+        width={dimensions.width}
+        height={dimensions.height}
         graphData={graphData}
         nodeId="id"
         nodeCanvasObject={paintNode}
@@ -250,10 +296,10 @@ export default function GraphView() {
         }}
         onBackgroundClick={() => setSelectedNode(null)}
         onEngineStop={handleEngineStop}
-        warmupTicks={80}
+        warmupTicks={0}
         cooldownTicks={Infinity}
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.4}
+        d3AlphaDecay={0.03}
+        d3VelocityDecay={0.6}
         backgroundColor={bgColor}
       />
       {/* 重整按鈕 */}
