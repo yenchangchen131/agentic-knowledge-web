@@ -1,6 +1,6 @@
 // src/components/ChatWindow.jsx
 import { useRef, useEffect, useState } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import useStore from '../store/useStore';
 import { sendChat } from '../lib/api';
@@ -12,6 +12,9 @@ export default function ChatWindow() {
   const setChatInput = useStore((s) => s.setChatInput);
   const isChatLoading = useStore((s) => s.isChatLoading);
   const setIsChatLoading = useStore((s) => s.setIsChatLoading);
+  const setHighlightedNodes = useStore((s) => s.setHighlightedNodes);
+  const setOpenDocument = useStore((s) => s.setOpenDocument);
+  const setViewMode = useStore((s) => s.setViewMode);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -39,7 +42,17 @@ export default function ChatWindow() {
 
     try {
       const result = await sendChat(question);
-      addMessage({ id: Date.now() + '-ai', role: 'ai', content: result.answer });
+      addMessage({
+        id: Date.now() + '-ai',
+        role: 'ai',
+        content: result.answer,
+        extracted_entities: result.extracted_entities || [],
+        used_entities: result.used_entities || [],
+        numbered_sources: result.numbered_sources || [],
+        cited_sources: result.cited_sources || [],
+      });
+      const allNodes = [...(result.extracted_entities || []), ...(result.used_entities || [])];
+      if (allNodes.length > 0) setHighlightedNodes(allNodes);
     } catch (err) {
       addMessage({
         id: Date.now() + '-err',
@@ -83,8 +96,48 @@ export default function ChatWindow() {
             className={`fade-in ${msg.role === 'user' ? 'msg-user' : 'msg-ai'}`}
           >
             {msg.role === 'ai' ? (
-              <div className="prose dark:prose-invert prose-sm max-w-none">
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+              <div className="text-sm">
+                {/* 檢索透明度：抽取關鍵字 */}
+                {msg.extracted_entities?.length > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-medium">🔍</span>
+                    {msg.extracted_entities.map((e) => (
+                      <span key={e} className="px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">{e}</span>
+                    ))}
+                  </div>
+                )}
+                {/* 檢索透明度：用到的圖譜節點 */}
+                {msg.used_entities?.length > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-medium">🌐</span>
+                    {msg.used_entities.map((e) => (
+                      <span key={e} className="px-1.5 py-0.5 rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300">{e}</span>
+                    ))}
+                  </div>
+                )}
+                {/* 答案主體 */}
+                <div className="prose dark:prose-invert prose-sm max-w-none">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+                {/* Citation 來源列表 */}
+                {msg.cited_sources?.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/50">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">📎 參考來源：</span>
+                      {msg.numbered_sources.map((src, i) => src && (
+                        <button
+                          key={i}
+                          onClick={() => { setOpenDocument(src); setViewMode('document'); }}
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-accent/10 hover:text-accent-light transition-colors"
+                          title={src}
+                        >
+                          <FileText size={10} />
+                          <span>[{i + 1}] {src}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <span className="text-sm">{msg.content}</span>

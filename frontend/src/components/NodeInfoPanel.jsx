@@ -1,11 +1,23 @@
 // src/components/NodeInfoPanel.jsx
-import { Network, Tag, ArrowRight, Bot } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Network, Tag, ArrowRight, Bot, FileText } from 'lucide-react';
 import useStore from '../store/useStore';
+import { fetchNodeSources } from '../lib/api';
 
 export default function NodeInfoPanel() {
   const selectedNode = useStore((s) => s.selectedNode);
   const graphData = useStore((s) => s.graphData);
   const setChatInput = useStore((s) => s.setChatInput);
+  const setOpenDocument = useStore((s) => s.setOpenDocument);
+  const setViewMode = useStore((s) => s.setViewMode);
+  const [sources, setSources] = useState([]);
+
+  useEffect(() => {
+    if (!selectedNode) { setSources([]); return; }
+    fetchNodeSources(selectedNode.id)
+      .then(setSources)
+      .catch(() => setSources([]));
+  }, [selectedNode]);
 
   if (!selectedNode) {
     return (
@@ -74,6 +86,28 @@ export default function NodeInfoPanel() {
           </span>
         </div>
       </div>
+
+      {/* 來源文件 */}
+      {sources.length > 0 && (
+        <div className="mb-3 pb-3 border-b border-slate-200 dark:border-slate-700/50">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 font-medium flex items-center gap-1">
+            <FileText size={11} />
+            來自文檔
+          </p>
+          <div className="flex flex-col gap-1">
+            {sources.map((src) => (
+              <button
+                key={src}
+                onClick={() => { setOpenDocument(src); setViewMode('document'); }}
+                className="text-left text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-accent/10 hover:text-accent-light transition-colors truncate"
+                title={src}
+              >
+                {src}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto space-y-1.5">
         {relations.length === 0 ? (
