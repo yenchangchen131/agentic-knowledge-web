@@ -20,7 +20,7 @@ function App() {
       setIsGraphLoading(true);
       try {
         const [graphData, stats] = await Promise.all([
-          fetchGraphInit(),
+          fetchGraphInit(80),
           fetchGraphStats(),
         ]);
         setGraphData(graphData);
