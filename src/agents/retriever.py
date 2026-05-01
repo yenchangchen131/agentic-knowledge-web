@@ -81,7 +81,7 @@ def retrieve(question: str, chroma: ChromaClient, neo4j: Neo4jClient, llm) -> di
     if vector_results:
         context_parts.append("【向量檢索結果】")
         for i, result in enumerate(vector_results, 1):
-            context_parts.append(f"{i}. {result['text']}")
+            context_parts.append(f"[{i}] {result['text']}")
 
     if graph_results:
         context_parts.append("\n【知識圖譜檢索結果】")

@@ -7,6 +7,7 @@ import { resetDatabase } from '../lib/api';
 export default function ResetButton() {
   const resetAll = useStore((s) => s.resetAll);
   const setStats = useStore((s) => s.setStats);
+  const bumpDocumentsVersion = useStore((s) => s.bumpDocumentsVersion);
   const [isResetting, setIsResetting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -16,6 +17,7 @@ export default function ResetButton() {
       await resetDatabase();
       resetAll();
       setStats({ node_count: 0, relation_count: 0, chunk_count: 0, type_distribution: {} });
+      bumpDocumentsVersion();
     } catch (err) {
       console.error('重置失敗:', err);
     } finally {

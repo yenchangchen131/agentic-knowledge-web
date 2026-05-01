@@ -30,6 +30,18 @@ export async function sendChat(question) {
   return data;
 }
 
+/** 取得節點的來源文件列表 */
+export async function fetchNodeSources(nodeName) {
+  const { data } = await api.get(`/api/graph/sources/${encodeURIComponent(nodeName)}`);
+  return data.sources;
+}
+
+/** 刪除指定文件及其相關圖譜/向量資料 */
+export async function deleteDocument(filename) {
+  const { data } = await api.delete(`/api/documents/${encodeURIComponent(filename)}`);
+  return data;
+}
+
 /** 上傳 Markdown 檔案並追蹤進度 */
 export async function uploadFile(file, onProgress) {
   const form = new FormData();

@@ -21,6 +21,12 @@ def graph_expand(node_name: str, neo4j=Depends(get_neo4j)):
     return neo4j.expand_node(name=node_name)
 
 
+@router.get("/sources/{node_name}")
+def graph_sources(node_name: str, neo4j=Depends(get_neo4j)):
+    """取得某節點的來源文件列表"""
+    return {"sources": neo4j.get_entity_sources(node_name)}
+
+
 @router.get("/stats")
 def graph_stats(neo4j=Depends(get_neo4j), chroma=Depends(get_chroma)):
     """取得圖譜與知識庫統計資訊"""

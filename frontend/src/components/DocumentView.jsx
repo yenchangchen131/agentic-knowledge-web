@@ -1,8 +1,9 @@
 // src/components/DocumentView.jsx
 import { useEffect, useState, Component } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FileText, Loader2, Clock, HardDrive, FileCode, FileType } from 'lucide-react';
-import { fetchDocuments, fetchDocumentContent, API_BASE } from '../lib/api';
+import { FileText, Loader2, Clock, HardDrive, FileCode, FileType, Trash2 } from 'lucide-react';
+import { fetchDocuments, fetchDocumentContent, deleteDocument, fetchGraphInit, fetchGraphStats, API_BASE } from '../lib/api';
+import useStore from '../store/useStore';
 
 class MarkdownErrorBoundary extends Component {
   constructor(props) {
@@ -38,23 +39,62 @@ export default function DocumentView() {
   const [docData, setDocData] = useState(null); // { type, content, url }
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [deletingDoc, setDeletingDoc] = useState(null);
 
-  useEffect(() => {
-    const loadDocs = async () => {
-      try {
-        const docs = await fetchDocuments();
-        setDocuments(docs);
-        if (docs.length > 0) {
-          setSelectedDoc(docs[0].filename);
-        }
-      } catch (err) {
-        console.error('載入筆記列表失敗:', err);
-      } finally {
-        setIsLoadingList(false);
+  const openDocument = useStore((s) => s.openDocument);
+  const setOpenDocument = useStore((s) => s.setOpenDocument);
+  const documentsVersion = useStore((s) => s.documentsVersion);
+  const setGraphData = useStore((s) => s.setGraphData);
+  const setStats = useStore((s) => s.setStats);
+
+  const loadDocs = async () => {
+    setIsLoadingList(true);
+    try {
+      const docs = await fetchDocuments();
+      setDocuments(docs);
+      if (docs.length > 0 && !selectedDoc) {
+        setSelectedDoc(docs[0].filename);
       }
-    };
-    loadDocs();
-  }, []);
+    } catch (err) {
+      console.error('載入筆記列表失敗:', err);
+    } finally {
+      setIsLoadingList(false);
+    }
+  };
+
+  useEffect(() => { loadDocs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (documentsVersion > 0) loadDocs(); }, [documentsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 監聽 openDocument，自動切換到指定文件
+  useEffect(() => {
+    if (openDocument) {
+      setSelectedDoc(openDocument);
+      setOpenDocument(null);
+    }
+  }, [openDocument, setOpenDocument]);
+
+  const handleDelete = async (e, filename) => {
+    e.stopPropagation();
+    if (!window.confirm(`確定刪除「${filename}」？\n相關圖譜節點與向量資料會同步清除。`)) return;
+    setDeletingDoc(filename);
+    try {
+      await deleteDocument(filename);
+      setDocuments((prev) => prev.filter((d) => d.filename !== filename));
+      if (selectedDoc === filename) {
+        setSelectedDoc(null);
+        setDocData(null);
+      }
+      // 重新整理圖譜
+      const [graphData, stats] = await Promise.all([fetchGraphInit(), fetchGraphStats()]);
+      setGraphData(graphData);
+      setStats(stats);
+    } catch (err) {
+      console.error('刪除文件失敗:', err);
+      alert('刪除失敗，請查看 console');
+    } finally {
+      setDeletingDoc(null);
+    }
+  };
 
   useEffect(() => {
     if (!selectedDoc) return;
@@ -136,26 +176,37 @@ export default function DocumentView() {
           )}
           {documents.map((doc) => {
             const Icon = FILE_ICONS[doc.type] || FileText;
+            const isDeleting = deletingDoc === doc.filename;
             return (
-              <button
+              <div
                 key={doc.filename}
-                onClick={() => setSelectedDoc(doc.filename)}
                 className={`
-                  flex flex-col items-start gap-1 p-3 rounded-lg text-left transition-all
+                  group relative flex items-start gap-1 p-3 rounded-lg transition-all cursor-pointer
                   ${selectedDoc === doc.filename
                     ? 'bg-accent/10 dark:bg-accent/20 border border-accent/30 text-accent-dark dark:text-accent-light'
                     : 'hover:bg-slate-100 dark:hover:bg-surface-700/50 text-slate-600 dark:text-slate-400 border border-transparent'}
                 `}
+                onClick={() => setSelectedDoc(doc.filename)}
               >
-                <div className="flex items-center gap-1.5 w-full">
-                  <Icon size={13} className="flex-shrink-0 opacity-60" />
-                  <span className="font-medium text-sm truncate">{doc.filename}</span>
+                <div className="flex-1 flex flex-col gap-1 min-w-0">
+                  <div className="flex items-center gap-1.5 w-full">
+                    <Icon size={13} className="flex-shrink-0 opacity-60" />
+                    <span className="font-medium text-sm truncate">{doc.filename}</span>
+                  </div>
+                  <div className="flex gap-3 text-[10px] opacity-60 pl-0.5">
+                    <span className="flex items-center gap-1"><HardDrive size={10} /> {formatSize(doc.size)}</span>
+                    <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(doc.modified_time)}</span>
+                  </div>
                 </div>
-                <div className="flex gap-3 text-[10px] opacity-60 pl-0.5">
-                  <span className="flex items-center gap-1"><HardDrive size={10} /> {formatSize(doc.size)}</span>
-                  <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(doc.modified_time)}</span>
-                </div>
-              </button>
+                <button
+                  onClick={(e) => handleDelete(e, doc.filename)}
+                  disabled={isDeleting}
+                  className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                  title="刪除此筆記"
+                >
+                  {isDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                </button>
+              </div>
             );
           })}
         </div>

@@ -1,9 +1,12 @@
 # src/scripts/reset.py
 """資料庫重置邏輯，可被 API 呼叫或 CLI 直接執行"""
 import logging
+from pathlib import Path
 
 from src.database.neo4j_client import Neo4jClient
 from src.database.chroma_client import ChromaClient
+
+UPLOAD_DIR = Path("data/uploads")
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,19 @@ def reset_chroma(client: ChromaClient | None = None):
         logger.info("ChromaDB 的 knowledge_web Collection 已清空並重建！")
     except Exception as e:
         logger.error("重置 ChromaDB 失敗: %s", e)
+
+
+def reset_uploads():
+    """刪除 data/uploads/ 內的所有上傳檔案（保留資料夾）"""
+    if not UPLOAD_DIR.exists():
+        logger.info("上傳目錄不存在，跳過")
+        return
+    deleted = 0
+    for f in UPLOAD_DIR.iterdir():
+        if f.is_file():
+            f.unlink()
+            deleted += 1
+    logger.info("已刪除 %d 個上傳檔案", deleted)
 
 
 if __name__ == "__main__":

@@ -15,9 +15,15 @@ const useStore = create((set, get) => ({
   graphVersion: 0,
   selectedNode: null,
   expandedNodes: new Set(),
+  highlightedNodes: new Set(),
+  _highlightTimerId: null,
 
   // ─── 視圖狀態 ───
   viewMode: 'graph', // 'graph' | 'document'
+
+  // ─── 文件狀態 ───
+  openDocument: null,
+  documentsVersion: 0,
 
   // ─── 主題狀態 ───
   theme: _savedTheme, // 'light' | 'dark'
@@ -30,6 +36,7 @@ const useStore = create((set, get) => ({
   // ─── 全域狀態 ───
   stats: null,
   isGraphLoading: false,
+  isUploading: false,
 
   // ─── 圖譜 Actions ───
   setGraphData: (data) => set((state) => ({
@@ -70,6 +77,23 @@ const useStore = create((set, get) => ({
 
   setSelectedNode: (node) => set({ selectedNode: node }),
 
+  setHighlightedNodes: (ids, ttlMs = 15000) => {
+    const { _highlightTimerId } = get();
+    if (_highlightTimerId) clearTimeout(_highlightTimerId);
+    const timerId = setTimeout(() => set({ highlightedNodes: new Set(), _highlightTimerId: null }), ttlMs);
+    set({ highlightedNodes: new Set(ids), _highlightTimerId: timerId });
+  },
+
+  clearHighlightedNodes: () => {
+    const { _highlightTimerId } = get();
+    if (_highlightTimerId) clearTimeout(_highlightTimerId);
+    set({ highlightedNodes: new Set(), _highlightTimerId: null });
+  },
+
+  // ─── 文件 Actions ───
+  setOpenDocument: (filename) => set({ openDocument: filename }),
+  bumpDocumentsVersion: () => set((s) => ({ documentsVersion: s.documentsVersion + 1 })),
+
   // ─── UI Actions ───
   setViewMode: (mode) => set({ viewMode: mode }),
 
@@ -97,16 +121,22 @@ const useStore = create((set, get) => ({
   // ─── 全域 Actions ───
   setStats: (stats) => set({ stats }),
   setIsGraphLoading: (v) => set({ isGraphLoading: v }),
+  setIsUploading: (v) => set({ isUploading: v }),
 
-  resetAll: () =>
+  resetAll: () => {
+    const { _highlightTimerId } = get();
+    if (_highlightTimerId) clearTimeout(_highlightTimerId);
     set({
       graphData: { nodes: [], links: [] },
       selectedNode: null,
       expandedNodes: new Set(),
+      highlightedNodes: new Set(),
+      _highlightTimerId: null,
       messages: [],
       chatInput: '',
       stats: null,
-    }),
+    });
+  },
 }));
 
 export default useStore;

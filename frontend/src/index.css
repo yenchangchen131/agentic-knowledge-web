@@ -186,15 +186,15 @@
   }
 
   .resize-handle-v {
-    @apply flex items-center justify-center h-3 cursor-row-resize;
+    @apply flex items-center justify-center h-px cursor-row-resize;
+    background: var(--border);
+    transition: background 0.15s ease;
   }
   .resize-handle-v::after {
-    content: '';
-    @apply h-1 w-16 rounded-full transition-colors duration-150;
-    background: var(--border);
+    display: none;
   }
-  .resize-handle-v:hover::after,
-  .resize-handle-v[data-resize-handle-active]::after {
+  .resize-handle-v:hover,
+  .resize-handle-v[data-resize-handle-active] {
     background: #6366f1;
   }
 }

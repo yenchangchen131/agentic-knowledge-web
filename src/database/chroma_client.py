@@ -99,6 +99,15 @@ class ChromaClient:
             )
         ]
 
+    def delete_by_source(self, source_path: str) -> int:
+        """刪除所有 metadata.source == source_path 的 chunks，回傳刪除數量"""
+        results = self.collection.get(where={"source": source_path})
+        count = len(results["ids"])
+        if count > 0:
+            self.collection.delete(where={"source": source_path})
+            logger.info("已刪除 %d 個 chunk，來源: %s", count, source_path)
+        return count
+
     def count(self) -> int:
         return self.collection.count()
 

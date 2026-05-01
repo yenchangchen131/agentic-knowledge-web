@@ -9,7 +9,8 @@ from src.database.chroma_client import ChromaClient
 logger = logging.getLogger(__name__)
 
 ANSWER_PROMPT = """你是一個知識助理。根據以下檢索到的上下文，回答使用者的問題。
-如果上下文中沒有相關資訊，請誠實地說你不知道。
+上下文中的向量檢索結果以 [1] [2] [3] ... 編號，回答時請在引用對應結果的句子末尾加上對應的編號，例如「LangGraph 是一個框架 [1]」。
+如果上下文中沒有相關資訊，請誠實地說你不知道，不要捏造資訊。
 
 上下文：
 {context}
