@@ -1,8 +1,9 @@
 // src/components/GraphView.jsx
 import { useRef, useCallback, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { RotateCw } from 'lucide-react';
 import useStore from '../store/useStore';
-import { expandNode } from '../lib/api';
+import { expandNode, fetchGraphInit } from '../lib/api';
 
 const NODE_COLORS = {
   '概念': '#6366f1',
@@ -19,10 +20,12 @@ function getNodeColor(node) {
 export default function GraphView() {
   const graphData = useStore((s) => s.graphData);
   const graphVersion = useStore((s) => s.graphVersion);
+  const setGraphData = useStore((s) => s.setGraphData);
   const setSelectedNode = useStore((s) => s.setSelectedNode);
   const mergeGraphData = useStore((s) => s.mergeGraphData);
   const markNodeExpanded = useStore((s) => s.markNodeExpanded);
   const expandedNodes = useStore((s) => s.expandedNodes);
+  const highlightedNodes = useStore((s) => s.highlightedNodes);
   const isGraphLoading = useStore((s) => s.isGraphLoading);
   const theme = useStore((s) => s.theme);
 
@@ -43,22 +46,31 @@ export default function GraphView() {
     return () => observer.disconnect();
   }, []);
 
-  // 自訂 D3 forces（只在掛載時執行一次；graphVersion 變化觸發重新掛載時也會重新執行）
+  // 自訂 D3 forces
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg) return;
-    // 稍微延遲，等 ForceGraph2D 初始化完成
     const timer = setTimeout(() => {
       try {
-        fg.d3Force('link')?.distance(80).strength(0.5);
-        fg.d3Force('charge')?.strength(-180);
+        fg.d3Force('link')?.distance(60).strength(0.3);
+        fg.d3Force('charge')?.strength(-120);
         fg.d3Force('center')?.strength(0.05);
-      } catch (_) {
-        // ForceGraph2D 可能在 warmupTicks 期間還沒有 expose forces
-      }
+      } catch (_) {}
     }, 50);
     return () => clearTimeout(timer);
   }, [graphVersion]);
+
+  // 當 highlightedNodes 變化時，reheat 模擬（確保重繪）並 zoom to fit
+  useEffect(() => {
+    if (highlightedNodes.size === 0 || !fgRef.current) return;
+    fgRef.current.d3ReheatSimulation();
+    const timer = setTimeout(() => {
+      if (fgRef.current) {
+        fgRef.current.zoomToFit(800, 80, (n) => highlightedNodes.has(n.id));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [highlightedNodes]);
 
   const handleNodeClick = useCallback(
     (node) => {
@@ -85,15 +97,14 @@ export default function GraphView() {
     [expandedNodes, mergeGraphData, markNodeExpanded]
   );
 
-  // 模擬結束後凍結所有節點，避免展開時擾動已穩定節點
-  const handleEngineStop = useCallback(() => {
-    graphData.nodes.forEach((node) => {
-      if (node.x !== undefined && node.fx === undefined) {
-        node.fx = node.x;
-        node.fy = node.y;
-      }
-    });
-  }, [graphData.nodes]);
+  const handleRefresh = useCallback(async () => {
+    try {
+      const data = await fetchGraphInit();
+      setGraphData(data);
+    } catch (err) {
+      console.error('重整圖譜失敗:', err);
+    }
+  }, [setGraphData]);
 
   const labelColor = theme === 'dark' ? '#e2e8f0' : '#1e293b';
   const linkColor = theme === 'dark' ? 'rgba(100, 116, 139, 0.3)' : 'rgba(71, 85, 105, 0.35)';
@@ -105,12 +116,28 @@ export default function GraphView() {
     const fontSize = Math.max(12 / globalScale, 3);
     const nodeSize = Math.max(4, Math.min(node.neighbors?.length || 3, 12));
     const color = getNodeColor(node);
+    const isHighlighted = highlightedNodes.has(node.id);
 
-    // 光暈效果
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, nodeSize + 3, 0, 2 * Math.PI);
-    ctx.fillStyle = color + '20';
-    ctx.fill();
+    // 高亮脈動光暈
+    if (isHighlighted) {
+      const pulse = (Math.sin(Date.now() / 400) + 1) / 2; // 0~1
+      const ringRadius = nodeSize + 5 + pulse * 5;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, ringRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = color + Math.round(pulse * 80 + 20).toString(16).padStart(2, '0');
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, nodeSize + 4, 0, 2 * Math.PI);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2 / globalScale;
+      ctx.stroke();
+    } else {
+      // 一般光暈
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, nodeSize + 3, 0, 2 * Math.PI);
+      ctx.fillStyle = color + '20';
+      ctx.fill();
+    }
 
     // 節點本體
     ctx.beginPath();
@@ -119,7 +146,7 @@ export default function GraphView() {
     ctx.fill();
 
     // 已展開標記（外圈）
-    if (expandedNodes.has(node.id)) {
+    if (expandedNodes.has(node.id) && !isHighlighted) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, nodeSize + 2, 0, 2 * Math.PI);
       ctx.strokeStyle = color;
@@ -132,10 +159,10 @@ export default function GraphView() {
       ctx.font = `${fontSize}px Inter, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = labelColor;
+      ctx.fillStyle = isHighlighted ? color : labelColor;
       ctx.fillText(label, node.x, node.y + nodeSize + 3);
     }
-  }, [expandedNodes, labelColor]);
+  }, [expandedNodes, highlightedNodes, labelColor]);
 
   const paintLink = useCallback((link, ctx, globalScale) => {
     const start = link.source;
@@ -196,7 +223,6 @@ export default function GraphView() {
         nodeId="id"
         nodeCanvasObject={paintNode}
         nodePointerAreaPaint={(node, color, ctx) => {
-          // 點擊範圍比視覺節點大，讓點擊更容易
           const size = Math.max(4, Math.min(node.neighbors?.length || 3, 12));
           ctx.beginPath();
           ctx.arc(node.x, node.y, Math.max(10, size + 6), 0, 2 * Math.PI);
@@ -211,13 +237,20 @@ export default function GraphView() {
           node.fy = node.y;
         }}
         onBackgroundClick={() => setSelectedNode(null)}
-        onEngineStop={handleEngineStop}
-        warmupTicks={50}
-        cooldownTicks={150}
-        d3AlphaDecay={0.015}
+        warmupTicks={0}
+        cooldownTicks={Infinity}
+        d3AlphaDecay={0.003}
         d3VelocityDecay={0.4}
         backgroundColor={bgColor}
       />
+      {/* 重整按鈕 */}
+      <button
+        onClick={handleRefresh}
+        className="absolute top-3 right-3 p-2 rounded-lg bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-accent-light hover:border-accent/40 transition-all backdrop-blur-sm"
+        title="重整圖譜"
+      >
+        <RotateCw size={15} />
+      </button>
       <div className="absolute bottom-4 left-4 text-xs text-slate-400 dark:text-slate-500 select-none pointer-events-none">
         單擊選取 · 右鍵展開 · 拖拽移動
       </div>
